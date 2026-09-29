@@ -63,6 +63,8 @@ rsync -a --delete \
     --exclude='.env*' \
     --exclude='dan-config.php' \
     --exclude='dan-ai.json' \
+    --exclude='plaid.env' \
+    --exclude='plaid-items/' \
     --exclude='.dan-deployed' \
     "$REPO_DIR/" "$WEB_DIR/"
 

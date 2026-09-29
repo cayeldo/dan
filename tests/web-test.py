@@ -54,13 +54,24 @@ def check(condition, message):
 
 
 with tempfile.TemporaryDirectory(prefix='dan-web-test-') as temporary:
-    folder = Path(temporary)
+    folder = Path(temporary) / 'public'
+    folder.mkdir()
+    private = Path(temporary) / 'plaid-items'
+    private.mkdir(mode=0o700)
+    plaid_config = Path(temporary) / 'plaid.env'
+    plaid_config.write_text('PLAID_CLIENT_ID=test-only-client\nPLAID_SECRET=test-only-secret\nPLAID_ENV=sandbox\n')
     for source in ROOT.glob('*.php'):
+        shutil.copy(source, folder)
+    for source in ROOT.glob('*.js'):
         shutil.copy(source, folder)
     for source in ROOT.glob('*.css'):
         shutil.copy(source, folder)
     shutil.copytree(ROOT / 'views', folder / 'views')
     (folder / 'sessions').mkdir()
+    plaid = (folder / 'plaid.php').read_text().replace('function plaid_api(', 'function unused_network_plaid_api(', 1)
+    plaid = plaid.replace("declare(strict_types=1);", "declare(strict_types=1);\nrequire __DIR__ . '/plaid-web-fixture.php';", 1)
+    (folder / 'plaid.php').write_text(plaid)
+    shutil.copy(ROOT / 'tests/plaid-web-fixture.php', folder)
     (folder / 'disabled-ai.json').write_text('{"enabled": false}')
     auth = (folder / 'auth.php').read_text().replace('function database(): PDO', 'function unused_production_database(): PDO', 1)
     auth = auth.replace('declare(strict_types=1);', "declare(strict_types=1);\nrequire_once __DIR__ . '/test-database.php';", 1)
@@ -100,7 +111,7 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
     base = f'http://127.0.0.1:{port}'
     log = open(folder / 'server.log', 'w+')
     server = subprocess.Popen(['php', '-d', 'session.save_path=' + str(folder / 'sessions'), '-S', f'127.0.0.1:{port}', '-t', str(folder)], stdout=log, stderr=log,
-                              env=dict(os.environ, OPENAI_API_KEY='', DAN_AI_CONFIG=str(folder / 'disabled-ai.json')))
+                              env=dict(os.environ, OPENAI_API_KEY='', DAN_AI_CONFIG=str(folder / 'disabled-ai.json'), DAN_PLAID_CONFIG=str(plaid_config), DAN_PLAID_STORAGE=str(private)))
     jar = http.cookiejar.CookieJar()
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar))
 
@@ -145,6 +156,21 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check(status == 200 and 'first monthly report' in empty, 'analyzer empty state renders')
         check('A few charts. A clearer picture.' in portal, 'new user sees an empty overview without invented totals')
         csrf = token(empty)
+        status, plaid_page, plaid_headers = request('/?page=plaid')
+        check(status == 200 and 'Connect Credit Card' in plaid_page and 'Test data only' in plaid_page, 'Sandbox connect page renders inside existing login')
+        check('https://cdn.plaid.com' in plaid_headers['Content-Security-Policy'] and 'https://sandbox.plaid.com' in plaid_headers['Content-Security-Policy'], 'Link resources allowed only by Sandbox page policy')
+        check(request('/?page=plaid&api=link-token')[0] == 405, 'Plaid mutations reject GET')
+        check(request('/?page=plaid&api=link-token', {'csrf': 'invalid'})[0] == 403, 'Plaid endpoints require CSRF')
+        status, link_result, _ = request('/?page=plaid&api=link-token', {'csrf': csrf})
+        check(status == 200 and 'link-sandbox-' in link_result and 'test-only-secret' not in link_result, 'browser receives only the short-lived Link token')
+        status, exchanged, _ = request('/?page=plaid&api=exchange', {'csrf': csrf, 'public_token': 'public-sandbox-00000000-0000-0000-0000-000000000001'})
+        check(status == 200 and exchanged == '{"connected":true}', 'public token exchanged with no access token in response')
+        status, retrieved, _ = request('/?page=plaid&api=transactions', {'csrf': csrf})
+        check(status == 200 and '"ready":true' in retrieved and 'access-sandbox' not in retrieved, 'transactions retrieved with server-held token')
+        status, plaid_table, _ = request('/?page=plaid')
+        check(status == 200 and 'Sandbox merchant' in plaid_table and '18.25 USD' in plaid_table and 'Pending' in plaid_table and 'FOOD_AND_DRINK_RESTAURANTS' in plaid_table, 'sample table displays date, merchant, amount, pending, and Plaid category')
+        check('&lt;script&gt;unsafe&lt;/script&gt;' in plaid_table and '<script>unsafe</script>' not in plaid_table and 'access-sandbox' not in plaid_table and 'test-only-secret' not in plaid_table, 'provider data is escaped and secrets stay out of HTML')
+        check('No transactions have' not in plaid_table, 'connected Sandbox page renders independently of spending reports')
         csv = b'Date,Transaction,Name,Memo,Amount\n8/1/26,DEBIT,RED ROBIN 23,111111111111111; 05812,-10\n8/2/26,DEBIT,RED ROBIN NO 360,222222222222222; 05812,-20\n8/3/26,DEBIT,UBER *EATS,333333333333333; 05812,-15\n8/4/26,DEBIT,CURIOUS SHOP,444444444444444;,-5\n8/5/26,CREDIT,PAYMENT MADE BY ACCOUNT ENDING IN:1234,INTERNET,50\n'
         upload = {'csrf': csrf, 'action': 'upload', 'account_id': 0, 'account_label': 'Test card', 'charge_sign': 'negative'}
         status, preview, _ = request('/?page=analyzer', upload, csv)
@@ -205,12 +231,15 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         status, login, _ = request('/', {'csrf': csrf, 'action': 'logout'})
         check('autocomplete="current-password"' in login, 'sign-out returns to login')
         status, protected, _ = request('/?page=analyzer')
+        check(request('/?page=plaid&api=link-token', {'csrf': csrf})[0] == 401, 'signed-out Plaid API requests are rejected')
         check('autocomplete="current-password"' in protected and 'Merchant totals' not in protected, 'signed-out requests cannot see reports')
         status, other_overview, _ = request('/', {'csrf': token(protected), 'username': 'second_test_user', 'password': 'test-only-passphrase'})
         check('A few charts. A clearer picture.' in other_overview and 'All-time purchases by category' not in other_overview, 'second user cannot see another user’s dashboard totals')
         status, other_user, _ = request('/?page=analyzer&month=2026-08&account=1')
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
-        for stylesheet in ['/styles.css', '/portal.css']:
+        status, other_plaid, _ = request('/?page=plaid')
+        check(status == 200 and 'Sandbox merchant' not in other_plaid and 'id="connect-card"' in other_plaid, 'second user cannot view first user’s Plaid connection')
+        for stylesheet in ['/styles.css', '/portal.css', '/plaid-link.js']:
             check(request(stylesheet)[0] == 200, stylesheet + ' served')
         log.flush()
         log.seek(0)

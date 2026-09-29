@@ -4,3 +4,6 @@ dan-config.php
 dan-ai.json
 *.log
 .DS_Store
+
+plaid.env
+plaid-items/

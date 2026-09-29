@@ -7,7 +7,7 @@ require __DIR__ . '/analytics.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = ($_GET['page'] ?? '') === 'analyzer' ? 'analyzer' : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'plaid'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -32,6 +32,8 @@ function redirect_analyzer(string $month = '', int $account = 0): never
 {
     header('Location: ' . analyzer_url($month, $account), true, 303); exit;
 }
+
+if ($page === 'plaid') { require __DIR__ . '/plaid-controller.php'; }
 
 try {
     $db = $page === 'analyzer' ? database() : null;
@@ -132,21 +134,21 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : 'Credit card analyzer' ?> · Dan</title>
+    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'plaid' ? 'Connect Credit Card · Sandbox' : 'Credit card analyzer') ?> · Dan</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/portal.css">
 </head>
 <body class="workspace">
 <header class="topbar">
     <a class="wordmark" href="/" aria-label="Dan home">dan<span>.</span></a>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=plaid" <?= $page === 'plaid' ? 'aria-current="page"' : '' ?>>Connect card <span class="nav-sandbox">Sandbox</span></a></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>
 <main class="workspace-main">
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="error" role="alert"><?= escape($error) ?></div><?php endif; ?>
-    <?php require __DIR__ . '/views/' . ($page === 'home' ? 'home' : 'analyzer') . '.php'; ?>
+    <?php require __DIR__ . '/views/' . $page . '.php'; ?>
 </main>
 <footer>Your space. Your records. <span>Signed in as <?= escape($displayName) ?></span></footer>
 </body>

@@ -223,3 +223,12 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 }
 
 @media (max-width: 700px) { .spending-line .axis-label { font-size: 20px; } .spending-line .axis-year { font-size: 17px; } }
+
+.nav-sandbox { font-size: .65rem; color: #56657b; margin-left: 6px; }
+.plaid-connect { max-width: 820px; }
+.plaid-table-wrap { margin-top: 24px; }
+.plaid-table-wrap td { max-width: 280px; overflow-wrap: anywhere; }
+.workspace [hidden] { display: none !important; }
+.workspace button:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 1000px) { .topbar { flex-wrap: wrap; gap: 12px 24px; } .topbar nav { min-height: 54px; } }
+@media (max-width: 700px) { .topbar nav { gap: 18px; flex-wrap: wrap; } .topbar nav a { min-height: 44px; } .nav-sandbox { display: none; } }
