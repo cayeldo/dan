@@ -232,3 +232,16 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .workspace button:disabled { opacity: .55; cursor: wait; }
 @media (max-width: 1000px) { .topbar { flex-wrap: wrap; gap: 12px 24px; } .topbar nav { min-height: 54px; } }
 @media (max-width: 700px) { .topbar nav { gap: 18px; flex-wrap: wrap; } .topbar nav a { min-height: 44px; } .nav-sandbox { display: none; } }
+
+/* A short, server-rendered connection flow. */
+.connect-steps ol { display: grid; gap: 30px; padding-left: 26px; }
+.connect-steps li { padding-left: 10px; }
+.connect-steps li > strong { font-size: 1.1rem; }
+.connect-steps li p { max-width: 760px; line-height: 1.6; }
+.connect-steps form, .connection-form { max-width: 680px; display: grid; gap: 12px; }
+.connection-form label, .connect-steps label { font-weight: 650; margin-top: 10px; }
+.connection-form button, .connect-steps form button { justify-self: start; }
+.connection-form input, .connection-form select, .connect-steps input { width: 100%; min-width: 0; }
+.preview-details { margin-top: 14px; padding: 16px; border: 1px solid var(--border, #dfe5f0); border-radius: 12px; }
+.preview-details summary { cursor: pointer; font-weight: 650; }
+.preview-details[open] summary { margin-bottom: 16px; }

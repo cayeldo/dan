@@ -3,7 +3,9 @@
 Run: python3 tests/web-test.py [optional-sample.csv]
 No production code, credentials, or user accounts are modified.
 """
+import base64
 import contextlib
+import datetime
 import http.cookiejar
 from html.parser import HTMLParser
 import os
@@ -72,6 +74,10 @@ with tempfile.TemporaryDirectory(prefix='dan-web-test-') as temporary:
     plaid = plaid.replace("declare(strict_types=1);", "declare(strict_types=1);\nrequire __DIR__ . '/plaid-web-fixture.php';", 1)
     (folder / 'plaid.php').write_text(plaid)
     shutil.copy(ROOT / 'tests/plaid-web-fixture.php', folder)
+    simplefin = (folder / 'simplefin.php').read_text().replace('function simplefin_http(', 'function unused_network_simplefin_http(', 1)
+    simplefin = simplefin.replace('declare(strict_types=1);', "declare(strict_types=1);\nrequire __DIR__ . '/simplefin-web-fixture.php';", 1)
+    (folder / 'simplefin.php').write_text(simplefin)
+    shutil.copy(ROOT / 'tests/simplefin-web-fixture.php', folder)
     (folder / 'disabled-ai.json').write_text('{"enabled": false}')
     auth = (folder / 'auth.php').read_text().replace('function database(): PDO', 'function unused_production_database(): PDO', 1)
     auth = auth.replace('declare(strict_types=1);', "declare(strict_types=1);\nrequire_once __DIR__ . '/test-database.php';", 1)
@@ -111,7 +117,7 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
     base = f'http://127.0.0.1:{port}'
     log = open(folder / 'server.log', 'w+')
     server = subprocess.Popen(['php', '-d', 'session.save_path=' + str(folder / 'sessions'), '-S', f'127.0.0.1:{port}', '-t', str(folder)], stdout=log, stderr=log,
-                              env=dict(os.environ, OPENAI_API_KEY='', DAN_AI_CONFIG=str(folder / 'disabled-ai.json'), DAN_PLAID_CONFIG=str(plaid_config), DAN_PLAID_STORAGE=str(private)))
+                              env=dict(os.environ, OPENAI_API_KEY='', DAN_AI_CONFIG=str(folder / 'disabled-ai.json'), DAN_PLAID_CONFIG=str(plaid_config), DAN_PLAID_STORAGE=str(private), DAN_SIMPLEFIN_STORAGE=str(Path(temporary) / 'simplefin-private')))
     jar = http.cookiejar.CookieJar()
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar))
 
@@ -156,6 +162,21 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check(status == 200 and 'first monthly report' in empty, 'analyzer empty state renders')
         check('A few charts. A clearer picture.' in portal, 'new user sees an empty overview without invented totals')
         csrf = token(empty)
+        status, connect_page, connect_headers = request('/?page=connect')
+        check(status == 200 and 'Three steps to automatic imports' in connect_page and 'Cardmember Service' in connect_page, 'SimpleFIN setup page renders')
+        check('cdn.plaid.com' not in connect_headers['Content-Security-Policy'], 'SimpleFIN page retains strict app policy without third-party scripts')
+        check(request('/?page=connect', {'action': 'sfin_connect', 'csrf': 'wrong'})[0] == 403, 'SimpleFIN connection requires CSRF')
+        setup = base64.b64encode(b'https://beta-bridge.simplefin.org/simplefin/claim/test-web-token').decode()
+        status, connected, _ = request('/?page=connect', {'action': 'sfin_connect', 'csrf': csrf, 'setup_token': setup})
+        check(status == 200 and 'Test Elan card' in connected and 'Select your credit card' in connected, 'setup exchange retrieves accounts without importing')
+        check('test-web-private-password' not in connected and setup not in connected and '&lt;script&gt;provider text&lt;/script&gt;' in connected, 'connection page escapes provider data and never returns tokens')
+        if os.environ.get('DAN_PREVIEW_DIR'):
+            destination = Path(os.environ['DAN_PREVIEW_DIR'])
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / 'connect.html').write_text(connect_page)
+            (destination / 'connected.html').write_text(connected)
+            for stylesheet in ROOT.glob('*.css'):
+                shutil.copy(stylesheet, destination)
         status, plaid_page, plaid_headers = request('/?page=plaid')
         check(status == 200 and 'Connect Credit Card' in plaid_page and 'Test data only' in plaid_page, 'Sandbox connect page renders inside existing login')
         check('https://cdn.plaid.com' in plaid_headers['Content-Security-Policy'] and 'https://sandbox.plaid.com' in plaid_headers['Content-Security-Policy'], 'Link resources allowed only by Sandbox page policy')
@@ -239,6 +260,20 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
         status, other_plaid, _ = request('/?page=plaid')
         check(status == 200 and 'Sandbox merchant' not in other_plaid and 'id="connect-card"' in other_plaid, 'second user cannot view first user’s Plaid connection')
+        status, other_connect, _ = request('/?page=connect')
+        check('Test Elan card' not in other_connect and 'setup_token' in other_connect, 'second user cannot see first user’s SimpleFIN connection')
+        other_csrf = token(other_connect)
+        status, other_connected, _ = request('/?page=connect', {'csrf': other_csrf, 'action': 'sfin_connect', 'setup_token': setup})
+        remote_key = re.search(r'<option value="([a-f0-9]{64})"', other_connected).group(1)
+        status, enabled, _ = request('/?page=connect', {'csrf': other_csrf, 'action': 'sfin_enable', 'remote_key': remote_key, 'account_id': '0', 'account_label': 'My test Visa', 'start_date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')})
+        check(status == 200 and 'Automatic imports are on.' in enabled, 'selecting a card enables automatic imports')
+        status, feed_report, _ = request('/?page=analyzer')
+        check(status == 200 and '$18.25' in feed_report and 'Costco' in feed_report and '$5.50' not in feed_report, 'posted feed charge appears in reports while pending charge is excluded')
+        status, paused, _ = request('/?page=connect', {'csrf': other_csrf, 'action': 'sfin_pause'})
+        check('Resume imports' in paused, 'automatic imports can be paused')
+        status, disconnected, _ = request('/?page=connect', {'csrf': other_csrf, 'action': 'sfin_disconnect'})
+        check('setup_token' in disconnected and 'Revoke the app token' in disconnected, 'disconnect removes access and explains provider revocation')
+        check('$18.25' in request('/?page=analyzer')[1], 'disconnect preserves spending reports')
         for stylesheet in ['/styles.css', '/portal.css', '/plaid-link.js']:
             check(request(stylesheet)[0] == 200, stylesheet + ' served')
         log.flush()

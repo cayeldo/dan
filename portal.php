@@ -7,7 +7,7 @@ require __DIR__ . '/analytics.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'plaid'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'plaid', 'connect'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -34,10 +34,11 @@ function redirect_analyzer(string $month = '', int $account = 0): never
 }
 
 if ($page === 'plaid') { require __DIR__ . '/plaid-controller.php'; }
+if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
     $db = $page === 'analyzer' ? database() : null;
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $page !== 'connect') {
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ANALYZER_MAX_BYTES + 65536) { throw new InvalidArgumentException('The upload is too large. Choose a CSV smaller than 2 MB.'); }
         if (!hash_equals($_SESSION['csrf'], input('csrf'))) {
             http_response_code(403); throw new InvalidArgumentException('Your form expired. Please try again.');
@@ -134,14 +135,14 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'plaid' ? 'Connect Credit Card · Sandbox' : 'Credit card analyzer') ?> · Dan</title>
+    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'plaid' ? 'Connect Credit Card · Sandbox' : ($page === 'connect' ? 'Connect your card' : 'Credit card analyzer')) ?> · Dan</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/portal.css">
 </head>
 <body class="workspace">
 <header class="topbar">
     <a class="wordmark" href="/" aria-label="Dan home">dan<span>.</span></a>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=plaid" <?= $page === 'plaid' ? 'aria-current="page"' : '' ?>>Connect card <span class="nav-sandbox">Sandbox</span></a></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>

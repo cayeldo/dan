@@ -22,9 +22,14 @@ git fetch origin main
 REMOTE_SHA="$(git rev-parse origin/main)"
 CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
 
-# Reuse the existing minute-by-minute job for pending AI classifications.
+# Reuse the existing minute-by-minute job for bank sync and AI categorization.
 # Run as the app user; API failures never fail a deployment.
-run_category_worker() {
+run_background_workers() {
+    if [ -f "$REPO_DIR/deploy/sync-simplefin.php" ]; then
+        timeout 30s sudo -u "$DEPLOY_USER" env \
+            DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
+            php "$REPO_DIR/deploy/sync-simplefin.php" || true
+    fi
     if [ -f "$REPO_DIR/deploy/categorize.php" ]; then
         timeout 50s sudo -u "$DEPLOY_USER" env \
             DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
@@ -35,7 +40,7 @@ run_category_worker() {
 
 # Nothing to do if this commit is already deployed.
 if [ -f "$MARKER_FILE" ] && [ "$(cat "$MARKER_FILE")" = "$REMOTE_SHA" ]; then
-    run_category_worker
+    run_background_workers
     exit 0
 fi
 
@@ -65,6 +70,7 @@ rsync -a --delete \
     --exclude='dan-ai.json' \
     --exclude='plaid.env' \
     --exclude='plaid-items/' \
+    --exclude='simplefin/' \
     --exclude='.dan-deployed' \
     "$REPO_DIR/" "$WEB_DIR/"
 
@@ -77,4 +83,4 @@ chown "$DEPLOY_USER:$DEPLOY_GROUP" "$MARKER_FILE"
 chmod 0644 "$MARKER_FILE"
 
 echo "$(date -Is) dan.cayelli.us deployed $REMOTE_SHA"
-run_category_worker
+run_background_workers

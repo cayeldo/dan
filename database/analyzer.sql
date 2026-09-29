@@ -90,3 +90,24 @@ CREATE TABLE IF NOT EXISTS analyzer_ai_jobs (
     FOREIGN KEY (merchant_id) REFERENCES analyzer_merchants(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS analyzer_simplefin_links (
+    user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    account_id BIGINT UNSIGNED NOT NULL,
+    remote_key CHAR(64) NOT NULL,
+    remote_id VARCHAR(255) NOT NULL,
+    start_date DATE NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY simplefin_local_account (account_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Retain CSV boundaries even if a connection is replaced or disconnected.
+CREATE TABLE IF NOT EXISTS analyzer_simplefin_history (
+    account_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    start_date DATE NOT NULL,
+    CONSTRAINT simplefin_history_account FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE,
+    CONSTRAINT simplefin_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

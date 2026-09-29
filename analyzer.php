@@ -249,8 +249,21 @@ function check_duplicate(array $row, array $existing): void
     }
 }
 
+/** CSV references and bank-feed IDs differ, so their date ranges must not overlap. */
+function check_csv_cutoff(PDO $db, int $userId, int $accountId, array $rows): void
+{
+    if (!$accountId) { return; }
+    $cutoff = analyzer_query($db, 'SELECT start_date FROM analyzer_simplefin_history WHERE user_id = ? AND account_id = ?', [$userId, $accountId])->fetchColumn();
+    if ($cutoff) {
+        foreach ($rows as $row) {
+            if ($row['date'] >= $cutoff) { throw new InvalidArgumentException('This card uses automatic imports from ' . $cutoff . '. Upload only earlier CSV history to avoid duplicates.'); }
+        }
+    }
+}
+
 function preview_import(PDO $db, int $userId, array $pending): array
 {
+    check_csv_cutoff($db, $userId, (int) $pending['account_id'], $pending['rows']);
     $matches = duplicate_matches($db, $userId, (int) $pending['account_id'], $pending['rows']);
     $savedRules = analyzer_query($db, 'SELECT a.match_key, m.name, c.name AS category, m.needs_review FROM analyzer_aliases a JOIN analyzer_merchants m ON m.id = a.merchant_id JOIN analyzer_categories c ON c.id = m.category_id WHERE a.user_id = ?', [$userId])->fetchAll();
     $rules = array_column($savedRules, null, 'match_key');
@@ -292,6 +305,7 @@ function save_import(PDO $db, int $userId, array $pending): array
                 $accountId = (int) $db->lastInsertId();
             }
         }
+        check_csv_cutoff($db, $userId, $accountId, $pending['rows']);
         $previous = analyzer_query($db, 'SELECT id FROM analyzer_imports WHERE account_id = ? AND file_hash = ?', [$accountId, $pending['file_hash']])->fetchColumn();
         if ($previous !== false) {
             $db->commit();
