@@ -6,20 +6,20 @@ $expandedMerchant = is_scalar($_GET['merchant'] ?? null) ? (int) $_GET['merchant
 <section class="panel category-audit-panel" aria-labelledby="audit-heading">
     <div class="section-heading"><div><h2 id="audit-heading">Audit your categories</h2><p class="hint">Expand a category to see its merchants, then expand a merchant to see every charge and correct its category.</p></div><span class="muted"><?= count($report['category_groups']) ?> categories</span></div>
     <?php foreach ($report['category_groups'] as $group): ?>
-    <details class="category-audit" id="category-<?= $group['id'] ?>" <?= $expandedCategory === $group['id'] || in_array($expandedMerchant, $group['merchant_ids'], true) || $group['review_count'] ? 'open' : '' ?>>
+    <details class="category-audit" id="category-<?= $group['id'] ?>" <?= $expandedCategory === $group['id'] || in_array($expandedMerchant, $group['merchant_ids'], true) ? 'open' : '' ?>>
         <summary class="audit-summary">
             <span class="audit-chevron" aria-hidden="true">›</span>
-            <span class="audit-name"><strong><?= escape($group['name']) ?></strong><small><?= count($group['merchant_ids']) ?> merchant<?= count($group['merchant_ids']) === 1 ? '' : 's' ?> · <?= $group['count'] ?> transaction<?= $group['count'] === 1 ? '' : 's' ?><?= $group['review_count'] ? ' · ' . $group['review_count'] . ' to review' : '' ?></small></span>
+            <span class="audit-name"><strong><?= escape($group['name']) ?></strong><small><?= count($group['merchant_ids']) ?> merchant<?= count($group['merchant_ids']) === 1 ? '' : 's' ?> · <?= $group['count'] ?> transaction<?= $group['count'] === 1 ? '' : 's' ?><?= $group['review_count'] ? ' · ' . $group['review_count'] . ' not confirmed' : '' ?></small></span>
             <span class="audit-amount"><small>Purchases</small><strong><?= money($group['expenses']) ?></strong></span>
             <span class="audit-amount"><small>Credits</small><strong><?= money($group['refunds']) ?></strong></span>
             <span class="audit-amount"><small>Net spending</small><strong><?= money($group['expenses'] - $group['refunds']) ?></strong></span>
         </summary>
         <div class="audit-merchants">
         <?php foreach ($group['merchant_ids'] as $merchantId): $merchant = $report['merchants'][$merchantId]; ?>
-            <details class="audit-merchant" id="merchant-<?= $merchant['id'] ?>" <?= $expandedMerchant === $merchant['id'] || $merchant['needs_review'] ? 'open' : '' ?>>
+            <details class="audit-merchant" id="merchant-<?= $merchant['id'] ?>" <?= $expandedMerchant === $merchant['id'] ? 'open' : '' ?>>
                 <summary class="audit-summary">
                     <span class="audit-chevron" aria-hidden="true">›</span>
-                    <span class="audit-name"><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?><?= $merchant['needs_review'] ? ' · Needs review' : '' ?></small></span>
+                    <span class="audit-name"><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?><?= category_automation_note($merchant) ? ' · ' . escape(category_automation_note($merchant)) : '' ?></small></span>
                     <span class="audit-amount"><small>Purchases</small><strong><?= money($merchant['expenses']) ?></strong></span>
                     <span class="audit-amount"><small>Credits</small><strong><?= money($merchant['refunds']) ?></strong></span>
                     <span class="audit-amount"><small>Net spending</small><strong><?= money($merchant['expenses'] - $merchant['refunds']) ?></strong></span>

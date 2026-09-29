@@ -73,6 +73,9 @@ try {
             if (!$pending || !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview expired or was replaced. Upload your CSV again.'); }
             $result = save_import($db, $userId, $pending);
             unset($_SESSION['pending_import']);
+            // The import is already committed. AI problems must not undo it.
+            try { run_category_ai($db, $userId); }
+            catch (Throwable $aiError) { error_log('Dan category AI will retry in background.'); }
             $_SESSION['notice'] = $result['added'] . ' transactions saved. ' . $result['skipped'] . ' duplicates skipped. Your reports are organized by transaction month.';
             redirect_analyzer($result['month']);
         } elseif ($action === 'discard_import') {

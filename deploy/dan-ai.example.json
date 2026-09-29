@@ -1,0 +1,5 @@
+{
+    "enabled": true,
+    "api_key": "REPLACE_WITH_OPENAI_API_KEY",
+    "model": "gpt-4.1-mini"
+}

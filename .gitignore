@@ -1,5 +1,6 @@
 .env
 .env.*
 dan-config.php
+dan-ai.json
 *.log
 .DS_Store

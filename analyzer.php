@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/ai-categories.php';
 
 const ANALYZER_MAX_BYTES = 2097152;
 const ANALYZER_MAX_ROWS = 10000;
@@ -216,7 +217,7 @@ function get_category(PDO $db, int $userId, string $name): int
 function resolve_merchant(PDO $db, int $userId, array $suggestion): int
 {
     $id = analyzer_query($db, 'SELECT merchant_id FROM analyzer_aliases WHERE user_id = ? AND match_key = ?', [$userId, $suggestion['key']])->fetchColumn();
-    if ($id !== false) { return (int) $id; }
+    if ($id !== false) { enqueue_merchant_ai($db, $userId, (int) $id); return (int) $id; }
     $id = analyzer_query($db, 'SELECT id FROM analyzer_merchants WHERE user_id = ? AND name = ?', [$userId, $suggestion['name']])->fetchColumn();
     if ($id === false) {
         $categoryId = get_category($db, $userId, $suggestion['category']);
@@ -225,6 +226,7 @@ function resolve_merchant(PDO $db, int $userId, array $suggestion): int
         $id = (int) $db->lastInsertId();
     }
     analyzer_query($db, 'INSERT INTO analyzer_aliases (user_id, match_key, merchant_id) VALUES (?, ?, ?)', [$userId, $suggestion['key'], $id]);
+    enqueue_merchant_ai($db, $userId, (int) $id);
     return (int) $id;
 }
 
@@ -337,6 +339,7 @@ function update_merchant(PDO $db, int $userId, int $merchantId, string $name, in
             $merchantId = (int) $target;
         }
         analyzer_query($db, 'UPDATE analyzer_merchants SET name = ?, category_id = ?, needs_review = 0 WHERE id = ? AND user_id = ?', [$name, $categoryId, $merchantId, $userId]);
+        analyzer_query($db, "UPDATE analyzer_ai_jobs SET status = 'overridden', lease_token = NULL WHERE merchant_id = ? AND user_id = ?", [$merchantId, $userId]);
         $db->commit();
     } catch (Throwable $error) { if ($db->inTransaction()) { $db->rollBack(); } throw $error; }
 }
@@ -353,7 +356,7 @@ function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0)
 {
     if (!preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $month)) { throw new InvalidArgumentException('Choose a valid month.'); }
     $next = (new DateTimeImmutable($month . '-01'))->modify('+1 month')->format('Y-m-d');
-    $sql = 'SELECT t.*, m.name AS merchant, m.category_id, m.needs_review, c.name AS category, a.label AS account FROM analyzer_transactions t JOIN analyzer_accounts a ON a.id = t.account_id LEFT JOIN analyzer_merchants m ON m.id = t.merchant_id LEFT JOIN analyzer_categories c ON c.id = m.category_id WHERE t.user_id = ? AND t.transaction_date >= ? AND t.transaction_date < ?';
+    $sql = 'SELECT t.*, m.name AS merchant, m.category_id, m.needs_review, j.status AS ai_status, c.name AS category, a.label AS account FROM analyzer_transactions t JOIN analyzer_accounts a ON a.id = t.account_id LEFT JOIN analyzer_merchants m ON m.id = t.merchant_id LEFT JOIN analyzer_categories c ON c.id = m.category_id LEFT JOIN analyzer_ai_jobs j ON j.merchant_id = m.id WHERE t.user_id = ? AND t.transaction_date >= ? AND t.transaction_date < ?';
     $params = [$userId, $month . '-01', $next];
     if ($accountId > 0) { $sql .= ' AND t.account_id = ?'; $params[] = $accountId; }
     $rows = analyzer_query($db, $sql . ' ORDER BY t.transaction_date DESC, t.id DESC', $params)->fetchAll();
@@ -367,7 +370,7 @@ function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0)
         if ($bucket === 'expenses') { $report['purchase_count']++; }
         $id = (int) $row['merchant_id'];
         $report['merchants'][$id] ??= ['id' => $id, 'name' => $row['merchant'], 'category' => $row['category'],
-            'category_id' => (int) $row['category_id'], 'needs_review' => (bool) $row['needs_review'], 'expenses' => 0, 'refunds' => 0, 'rows' => []];
+            'category_id' => (int) $row['category_id'], 'needs_review' => (bool) $row['needs_review'], 'ai_status' => $row['ai_status'], 'expenses' => 0, 'refunds' => 0, 'rows' => []];
         $report['merchants'][$id][$bucket] += $amount;
         $report['merchants'][$id]['rows'][] = $row;
         if ($bucket === 'expenses') { $report['categories'][$row['category']] = ($report['categories'][$row['category']] ?? 0) + $amount; }
@@ -387,6 +390,7 @@ function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0)
     }
     uasort($report['category_groups'], fn($a, $b) => ($b['expenses'] <=> $a['expenses']) ?: strcasecmp($a['name'], $b['name']));
     $report['review_count'] = count(array_filter($report['merchants'], fn($m) => $m['needs_review']));
+    $report['ai_pending_count'] = count(array_filter($report['merchants'], fn($m) => in_array($m['ai_status'], ['pending', 'processing', 'retry'], true)));
     $report['net'] = $report['expenses'] - $report['refunds'];
     return $report;
 }

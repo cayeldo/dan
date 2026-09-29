@@ -22,8 +22,20 @@ git fetch origin main
 REMOTE_SHA="$(git rev-parse origin/main)"
 CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
 
+# Reuse the existing minute-by-minute job for pending AI classifications.
+# Run as the app user; API failures never fail a deployment.
+run_category_worker() {
+    if [ -f "$REPO_DIR/deploy/categorize.php" ]; then
+        timeout 50s sudo -u "$DEPLOY_USER" env \
+            DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
+            DAN_AI_CONFIG="$(dirname "$WEB_DIR")/dan-ai.json" \
+            php "$REPO_DIR/deploy/categorize.php" || true
+    fi
+}
+
 # Nothing to do if this commit is already deployed.
 if [ -f "$MARKER_FILE" ] && [ "$(cat "$MARKER_FILE")" = "$REMOTE_SHA" ]; then
+    run_category_worker
     exit 0
 fi
 
@@ -50,6 +62,7 @@ rsync -a --delete \
     --exclude='.gitignore' \
     --exclude='.env*' \
     --exclude='dan-config.php' \
+    --exclude='dan-ai.json' \
     --exclude='.dan-deployed' \
     "$REPO_DIR/" "$WEB_DIR/"
 
@@ -62,3 +75,4 @@ chown "$DEPLOY_USER:$DEPLOY_GROUP" "$MARKER_FILE"
 chmod 0644 "$MARKER_FILE"
 
 echo "$(date -Is) dan.cayelli.us deployed $REMOTE_SHA"
+run_category_worker

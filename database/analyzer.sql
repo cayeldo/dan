@@ -73,3 +73,20 @@ CREATE TABLE IF NOT EXISTS analyzer_transactions (
     FOREIGN KEY (import_id) REFERENCES analyzer_imports(id) ON DELETE CASCADE,
     FOREIGN KEY (merchant_id) REFERENCES analyzer_merchants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS analyzer_ai_jobs (
+    merchant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME NOT NULL,
+    lease_token CHAR(32) DEFAULT NULL,
+    model VARCHAR(80) DEFAULT NULL,
+    category_name VARCHAR(80) DEFAULT NULL,
+    confidence VARCHAR(10) DEFAULT NULL,
+    last_error VARCHAR(32) DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY ai_queue (status, available_at),
+    FOREIGN KEY (merchant_id) REFERENCES analyzer_merchants(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

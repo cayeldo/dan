@@ -11,7 +11,7 @@
     <?php if ($preview['groups']): ?>
     <details class="preview-details"><summary>Review <?= count($preview['groups']) ?> merchant groups and suggested categories</summary>
         <div class="table-scroll"><table><thead><tr><th>Merchant</th><th>Category</th><th class="number">Transactions</th><th class="number">Net spending</th></tr></thead><tbody>
-        <?php foreach ($preview['groups'] as $group): ?><tr><td><?= escape($group['name']) ?></td><td><?= escape($group['category']) ?><?= $group['needs_review'] ? ' · Review after saving' : '' ?></td><td class="number"><?= $group['count'] ?></td><td class="number"><?= money($group['net']) ?></td></tr><?php endforeach; ?>
+        <?php foreach ($preview['groups'] as $group): ?><tr><td><?= escape($group['name']) ?></td><td><?= escape($group['category']) ?><?= $group['needs_review'] ? ' · Auto-categorize after saving' : '' ?></td><td class="number"><?= $group['count'] ?></td><td class="number"><?= money($group['net']) ?></td></tr><?php endforeach; ?>
         </tbody></table></div>
     </details>
     <?php endif; ?>
@@ -32,10 +32,10 @@
     <div class="stat primary-stat"><span>Total purchases</span><strong><?= money($report['expenses']) ?></strong><small><?= $report['purchase_count'] ?> purchases in <?= escape(month_label($month)) ?></small></div>
     <div class="stat"><span>Refunds & credits</span><strong><?= money($report['refunds']) ?></strong><small>Excludes card payments</small></div>
     <div class="stat"><span>Net spending</span><strong><?= money($report['net']) ?></strong><small>Purchases less refunds & credits</small></div>
-    <div class="stat"><span>Merchants</span><strong><?= count($report['merchants']) ?></strong><small><?= $report['review_count'] ? $report['review_count'] . ' categories to review' : 'Grouped across store locations' ?></small></div>
+    <div class="stat"><span>Merchants</span><strong><?= count($report['merchants']) ?></strong><small><?= $report['review_count'] ? $report['review_count'] . ' categories not yet confirmed' : 'Grouped across store locations' ?></small></div>
 </section>
 
-<?php if ($report['review_count']): ?><div class="review-banner"><div><strong>A few categories need your input.</strong><p><?= $report['review_count'] ?> merchants have a suggested or unknown category. Open “Edit / details” below to confirm a category or add your own.</p></div><a href="#merchant-totals">Review merchants</a></div><?php endif; ?>
+<?php if ($report['ai_pending_count']): ?><div class="review-banner"><div><strong>Automatic categorization is in progress.</strong><p><?= $report['ai_pending_count'] ?> merchants are queued. Your transactions are saved; categories will update automatically. Refresh shortly to see the results.</p></div><a href="<?= escape(analyzer_url($month, $accountFilter)) ?>">Refresh report</a></div><?php elseif ($report['review_count']): ?><p class="hint">Some merchants could not be confidently categorized. Their current categories are preserved; you can edit them in the audit below at any time.</p><?php endif; ?>
 
 <section class="panel category-panel" aria-labelledby="category-heading">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?></div><h2 id="category-heading">Where your money went</h2></div><span class="muted">Purchases by category</span></div>
@@ -59,7 +59,7 @@
     <div class="section-heading"><div><h2 id="merchant-heading">Merchant totals</h2><p class="hint">Store locations roll into one merchant. Changes to a merchant’s category are remembered for your account.</p></div><span class="muted"><?= count($report['merchants']) ?> merchants</span></div>
     <?php if ($report['merchants']): ?><div class="table-scroll"><table class="merchant-table"><thead><tr><th>Merchant</th><th>Category</th><th class="number">Purchases</th><th class="number">Credits</th><th class="number">Net spending</th><th><span class="sr-only">Edit and transaction details</span></th></tr></thead><tbody>
     <?php foreach ($report['merchants'] as $merchant): ?>
-    <tr><td><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?></small></td><td><span class="category-tag"><?= escape($merchant['category']) ?></span><?php if ($merchant['needs_review']): ?><small class="review-label">Needs review</small><?php endif; ?></td><td class="number"><?= money($merchant['expenses']) ?></td><td class="number"><?= $merchant['refunds'] ? money($merchant['refunds']) : '—' ?></td><td class="number"><strong><?= money($merchant['expenses'] - $merchant['refunds']) ?></strong></td><td><a href="<?= escape(analyzer_url($month, $accountFilter) . '&merchant=' . $merchant['id'] . '#merchant-' . $merchant['id']) ?>">Edit / details</a></td></tr>
+    <tr><td><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?></small></td><td><span class="category-tag"><?= escape($merchant['category']) ?></span><?php if (category_automation_note($merchant)): ?><small class="review-label"><?= escape(category_automation_note($merchant)) ?></small><?php endif; ?></td><td class="number"><?= money($merchant['expenses']) ?></td><td class="number"><?= $merchant['refunds'] ? money($merchant['refunds']) : '—' ?></td><td class="number"><strong><?= money($merchant['expenses'] - $merchant['refunds']) ?></strong></td><td><a href="<?= escape(analyzer_url($month, $accountFilter) . '&merchant=' . $merchant['id'] . '#merchant-' . $merchant['id']) ?>">Edit / details</a></td></tr>
     <?php endforeach; ?>
     </tbody><tfoot><tr><th colspan="2">Total</th><td class="number"><?= money($report['expenses']) ?></td><td class="number"><?= money($report['refunds']) ?></td><td class="number"><?= money($report['net']) ?></td><td></td></tr></tfoot></table></div>
     <?php else: ?><p class="empty-inline">No merchants to show for this month.</p><?php endif; ?>
@@ -77,7 +77,7 @@
         <?php if ($accounts): ?><label for="upload-account">Card</label><select name="account_id" id="upload-account"><?php foreach ($accounts as $account): ?><option value="<?= (int) $account['id'] ?>" <?= (int) $account['id'] === $accountFilter ? 'selected' : '' ?>><?= escape($account['label']) ?></option><?php endforeach; ?><option value="0">Add a different card</option></select><?php else: ?><input type="hidden" name="account_id" value="0"><?php endif; ?>
         <label for="account-label"><?= $accounts ? 'New card name (only when adding a card)' : 'Give this card a name' ?></label><input id="account-label" name="account_label" maxlength="80" placeholder="e.g. My Visa · 9814" <?= $accounts ? '' : 'required' ?>><p class="hint">A nickname or last four digits is enough.</p>
         <label for="charge-sign">How are purchases shown in your CSV?</label><select id="charge-sign" name="charge_sign"><option value="negative">Negative amounts (e.g. −19.80)</option><option value="positive">Positive amounts (e.g. 19.80)</option></select>
-        <label for="statement">CSV statement</label><input id="statement" name="statement" type="file" accept=".csv,text/csv" required><p class="hint">Up to 2 MB · 10,000 rows · Nothing is saved until you confirm the preview.</p>
+        <label for="statement">CSV statement</label><input id="statement" name="statement" type="file" accept=".csv,text/csv" required><p class="hint">Up to 2 MB · 10,000 rows · Nothing is saved until you confirm the preview.</p><p class="hint">Unfamiliar merchant names and category hints are sent to OpenAI for automatic categorization. Amounts, dates, account details, and memos stay in this app.</p>
         <button type="submit">Preview statement</button>
     </form>
 </section>

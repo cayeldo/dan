@@ -61,6 +61,7 @@ with tempfile.TemporaryDirectory(prefix='dan-web-test-') as temporary:
         shutil.copy(source, folder)
     shutil.copytree(ROOT / 'views', folder / 'views')
     (folder / 'sessions').mkdir()
+    (folder / 'disabled-ai.json').write_text('{"enabled": false}')
     auth = (folder / 'auth.php').read_text().replace('function database(): PDO', 'function unused_production_database(): PDO', 1)
     auth = auth.replace('declare(strict_types=1);', "declare(strict_types=1);\nrequire_once __DIR__ . '/test-database.php';", 1)
     (folder / 'auth.php').write_text(auth)
@@ -98,7 +99,8 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         port = sock.getsockname()[1]
     base = f'http://127.0.0.1:{port}'
     log = open(folder / 'server.log', 'w+')
-    server = subprocess.Popen(['php', '-d', 'session.save_path=' + str(folder / 'sessions'), '-S', f'127.0.0.1:{port}', '-t', str(folder)], stdout=log, stderr=log)
+    server = subprocess.Popen(['php', '-d', 'session.save_path=' + str(folder / 'sessions'), '-S', f'127.0.0.1:{port}', '-t', str(folder)], stdout=log, stderr=log,
+                              env=dict(os.environ, OPENAI_API_KEY='', DAN_AI_CONFIG=str(folder / 'disabled-ai.json')))
     jar = http.cookiejar.CookieJar()
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar))
 
@@ -149,7 +151,7 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         status, report, _ = request('/?page=analyzer', {'csrf': csrf, 'action': 'confirm_import', 'pending_token': token(preview, 'pending_token')})
         check(status == 200 and '5 transactions saved. 0 duplicates skipped.' in report, 'confirm saves import')
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
-        check('A few categories need your input.' in report and 'CURIOUS SHOP' in report, 'unknown merchant prompts for category review')
+        check('Automatic categorization is in progress.' in report and 'CURIOUS SHOP' in report, 'unknown merchant is queued without prompting for a category')
         audit = AuditDetails(report).nodes
         robin = next(node for key, node in audit.items() if key.startswith('merchant-') and 'RED ROBIN NO 360' in node['text'])
         restaurant = audit[robin['parent']]
