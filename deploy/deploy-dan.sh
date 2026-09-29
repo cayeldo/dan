@@ -1,0 +1,51 @@
+#!/bin/bash
+set -euo pipefail
+
+REPO_DIR="/opt/dan-repo"
+WEB_DIR="/home/cayeldo/domains/dan.cayelli.us/public_html"
+KEY_FILE="/root/.ssh/dan_deploy"
+DEPLOY_USER="cayeldo"
+DEPLOY_GROUP="cayeldo"
+MARKER_FILE="$WEB_DIR/.dan-deployed"
+LOCK_FILE="/tmp/dan-deploy.lock"
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+cd "$REPO_DIR"
+
+export GIT_SSH_COMMAND="ssh -i $KEY_FILE -o IdentitiesOnly=yes"
+
+# Get the latest version from GitHub.
+git fetch origin main
+
+REMOTE_SHA="$(git rev-parse origin/main)"
+CURRENT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+
+# Nothing to do if this commit is already deployed.
+if [ -f "$MARKER_FILE" ] && [ "$(cat "$MARKER_FILE")" = "$REMOTE_SHA" ]; then
+    exit 0
+fi
+
+# Update the local checkout to exactly match GitHub main.
+git reset --hard origin/main
+
+# Make sure the web directory exists.
+install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$WEB_DIR"
+
+# Deploy the application, but don't expose Git metadata or deployment files.
+rsync -a --delete \
+    --exclude='.git/' \
+    --exclude='deploy/' \
+    --exclude='.dan-deployed' \
+    "$REPO_DIR/" "$WEB_DIR/"
+
+# Restore DirectAdmin ownership.
+chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$WEB_DIR"
+
+# Record exactly which Git commit is live.
+printf '%s\n' "$REMOTE_SHA" > "$MARKER_FILE"
+chown "$DEPLOY_USER:$DEPLOY_GROUP" "$MARKER_FILE"
+chmod 0644 "$MARKER_FILE"
+
+echo "$(date -Is) dan.cayelli.us deployed $REMOTE_SHA"
