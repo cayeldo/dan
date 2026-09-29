@@ -143,6 +143,7 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check(status == 200 and 'Welcome back, First_test_user.' in portal and 'Open analyzer' in portal, 'login opens personalized portal')
         status, empty, _ = request('/?page=analyzer')
         check(status == 200 and 'first monthly report' in empty, 'analyzer empty state renders')
+        check('A few charts. A clearer picture.' in portal, 'new user sees an empty overview without invented totals')
         csrf = token(empty)
         csv = b'Date,Transaction,Name,Memo,Amount\n8/1/26,DEBIT,RED ROBIN 23,111111111111111; 05812,-10\n8/2/26,DEBIT,RED ROBIN NO 360,222222222222222; 05812,-20\n8/3/26,DEBIT,UBER *EATS,333333333333333; 05812,-15\n8/4/26,DEBIT,CURIOUS SHOP,444444444444444;,-5\n8/5/26,CREDIT,PAYMENT MADE BY ACCOUNT ENDING IN:1234,INTERNET,50\n'
         upload = {'csrf': csrf, 'action': 'upload', 'account_id': 0, 'account_label': 'Test card', 'charge_sign': 'negative'}
@@ -151,6 +152,9 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         status, report, _ = request('/?page=analyzer', {'csrf': csrf, 'action': 'confirm_import', 'pending_token': token(preview, 'pending_token')})
         check(status == 200 and '5 transactions saved. 0 duplicates skipped.' in report, 'confirm saves import')
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
+        check('No transactions have been imported for July 2026' in report, 'monthly comparison distinguishes missing prior data from zero')
+        status, overview, _ = request('/')
+        check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Category shifts' in overview, 'portal renders all dashboard charts after import')
         check('Automatic categorization is in progress.' in report and 'CURIOUS SHOP' in report, 'unknown merchant is queued without prompting for a category')
         audit = AuditDetails(report).nodes
         robin = next(node for key, node in audit.items() if key.startswith('merchant-') and 'RED ROBIN NO 360' in node['text'])
@@ -179,8 +183,20 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
             check(status == 200 and 'Save 136 transactions' in sample_preview, 'provided sample completes multipart upload and preview')
             status, sample_report, _ = request('/?page=analyzer', {'csrf': csrf, 'action': 'confirm_import', 'pending_token': token(sample_preview, 'pending_token')})
             check(status == 200 and '136 transactions saved' in sample_report and '$2,277.45' in sample_report, 'provided sample saves and opens September report')
+            check('September 2026 vs August 2026' in sample_report and '+$9.99' in sample_report and 'Percentage points' in sample_report, 'sample month comparison reconciles dollars and shows bill share changes')
+            status, overview, _ = request('/')
+            check(status == 200 and 'Monthly purchases over time' in overview and 'All-time purchases by category' in overview, 'populated overview renders line and cumulative charts')
+            if os.environ.get('DAN_PREVIEW_DIR'):
+                destination = Path(os.environ['DAN_PREVIEW_DIR'])
+                destination.mkdir(parents=True, exist_ok=True)
+                (destination / 'index.html').write_text(overview)
+                (destination / 'month.html').write_text(sample_report)
+                for stylesheet in ROOT.glob('*.css'):
+                    shutil.copy(stylesheet, destination)
             status, august, _ = request('/?page=analyzer&month=2026-08&account=2')
             check(status == 200 and '$2,217.46' in august and 'Food Delivery' in august, 'month and card filters reconcile sample August report')
+            status, september_card, _ = request('/?page=analyzer&month=2026-09&account=2')
+            check(status == 200 and '+$59.99' in september_card, 'previous-month comparison honors the selected card')
             sample_audit = AuditDetails(sample_report).nodes
             costco = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'COSTCO WHSE' in node['text'])
             harris = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'HARRIS TEETER' in node['text'])
@@ -190,7 +206,8 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check('autocomplete="current-password"' in login, 'sign-out returns to login')
         status, protected, _ = request('/?page=analyzer')
         check('autocomplete="current-password"' in protected and 'Merchant totals' not in protected, 'signed-out requests cannot see reports')
-        status, _, _ = request('/', {'csrf': token(protected), 'username': 'second_test_user', 'password': 'test-only-passphrase'})
+        status, other_overview, _ = request('/', {'csrf': token(protected), 'username': 'second_test_user', 'password': 'test-only-passphrase'})
+        check('A few charts. A clearer picture.' in other_overview and 'All-time purchases by category' not in other_overview, 'second user cannot see another user’s dashboard totals')
         status, other_user, _ = request('/?page=analyzer&month=2026-08&account=1')
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
         for stylesheet in ['/styles.css', '/portal.css']:

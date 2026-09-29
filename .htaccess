@@ -1,5 +1,5 @@
 DirectoryIndex index.php
 Options -Indexes
-<FilesMatch "(^\.|\.(sql|md|log|sh)$|^(auth|analyzer|ai-categories|portal)\.php$)">
+<FilesMatch "(^\.|\.(sql|md|log|sh)$|^(auth|analyzer|analytics|ai-categories|portal)\.php$)">
     Require all denied
 </FilesMatch>

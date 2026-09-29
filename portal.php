@@ -3,6 +3,7 @@ declare(strict_types=1);
 if (!isset($_SESSION['user'])) { http_response_code(403); exit; }
 define('DAN_PORTAL', true);
 require __DIR__ . '/analyzer.php';
+require __DIR__ . '/analytics.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
@@ -14,6 +15,7 @@ $accounts = []; $categories = []; $months = []; $imports = []; $report = null; $
 $accountFilter = max(0, (int) (is_scalar($_GET['account'] ?? null) ? $_GET['account'] : 0));
 $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
 $requestedMonth = $month;
+$history = []; $dashboard = null; $comparison = null;
 $pending = $_SESSION['pending_import'] ?? null;
 if ($pending && ($pending['user_id'] !== $userId || time() - $pending['created_at'] > 1800)) {
     unset($_SESSION['pending_import']); $pending = null;
@@ -104,6 +106,8 @@ if ($page === 'analyzer') {
         $months = report_months($db, $userId, $accountFilter);
         $month = preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $requestedMonth) ? $requestedMonth : ($months[0] ?? gmdate('Y-m'));
         $report = monthly_report($db, $userId, $month, $accountFilter);
+        $history = spending_history($db, $userId, $accountFilter);
+        $comparison = spending_comparison($history, $month);
         $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
         $imports = analyzer_query($db, 'SELECT i.*, a.label AS account FROM analyzer_imports i JOIN analyzer_accounts a ON a.id = i.account_id WHERE i.user_id = ? ORDER BY i.id DESC LIMIT 5', [$userId])->fetchAll();
         if ($pending) { $preview = preview_import($db, $userId, $pending); }
@@ -111,6 +115,15 @@ if ($page === 'analyzer') {
     catch (Throwable $exception) {
         error_log('Dan analyzer report failed: ' . get_class($exception));
         http_response_code(503); $error = 'The analyzer is temporarily unavailable. Please try again shortly.';
+    }
+}
+if ($page === 'home') {
+    try {
+        $history = spending_history(database(), $userId);
+        $dashboard = spending_dashboard($history);
+    } catch (Throwable $exception) {
+        error_log('Dan dashboard failed: ' . get_class($exception));
+        http_response_code(503); $error = 'Your spending overview is temporarily unavailable. Please try again shortly.';
     }
 }
 ?>

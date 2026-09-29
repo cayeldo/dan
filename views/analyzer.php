@@ -35,6 +35,8 @@
     <div class="stat"><span>Merchants</span><strong><?= count($report['merchants']) ?></strong><small><?= $report['review_count'] ? $report['review_count'] . ' categories not yet confirmed' : 'Grouped across store locations' ?></small></div>
 </section>
 
+<?php require __DIR__ . '/month-comparison.php'; ?>
+
 <?php if ($report['ai_pending_count']): ?><div class="review-banner"><div><strong>Automatic categorization is in progress.</strong><p><?= $report['ai_pending_count'] ?> merchants are queued. Your transactions are saved; categories will update automatically. Refresh shortly to see the results.</p></div><a href="<?= escape(analyzer_url($month, $accountFilter)) ?>">Refresh report</a></div><?php elseif ($report['review_count']): ?><p class="hint">Some merchants could not be confidently categorized. Their current categories are preserved; you can edit them in the audit below at any time.</p><?php endif; ?>
 
 <section class="panel category-panel" aria-labelledby="category-heading">
