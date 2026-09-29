@@ -48,39 +48,22 @@
         <?php $offset += $length; endforeach; ?>
         <text x="120" y="112" text-anchor="middle" class="donut-label">TOTAL PURCHASES</text><text x="120" y="141" text-anchor="middle" class="donut-total"><?= money($report['expenses']) ?></text>
         </svg>
-    </div><ul class="category-legend"><?php $colorIndex = 0; foreach ($report['categories'] as $category => $amount): ?><li><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="<?= chart_color($colorIndex++) ?>"/></svg><span><?= escape($category) ?></span><span class="category-share"><?= number_format($amount / $report['expenses'] * 100, 1) ?>%</span><strong><?= money($amount) ?></strong></li><?php endforeach; ?></ul></div>
+    </div><ul class="category-legend"><?php $categoryIds = array_column($report['category_groups'], 'id', 'name'); $colorIndex = 0; foreach ($report['categories'] as $category => $amount): ?><li><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="<?= chart_color($colorIndex++) ?>"/></svg><a href="<?= escape(analyzer_url($month, $accountFilter) . '&category=' . $categoryIds[$category] . '#category-' . $categoryIds[$category]) ?>"><?= escape($category) ?></a><span class="category-share"><?= number_format($amount / $report['expenses'] * 100, 1) ?>%</span><strong><?= money($amount) ?></strong></li><?php endforeach; ?></ul></div>
     <?php else: ?><p class="empty-inline">No purchases in this month. Choose another month or upload a statement.</p><?php endif; ?>
     <p class="hint">The chart shows purchases before refunds. Card payments are never counted as spending.</p>
 </section>
+
+<?php if ($report['merchants']): require __DIR__ . '/category-audit.php'; endif; ?>
 
 <section class="panel merchant-panel" id="merchant-totals" aria-labelledby="merchant-heading">
     <div class="section-heading"><div><h2 id="merchant-heading">Merchant totals</h2><p class="hint">Store locations roll into one merchant. Changes to a merchant’s category are remembered for your account.</p></div><span class="muted"><?= count($report['merchants']) ?> merchants</span></div>
     <?php if ($report['merchants']): ?><div class="table-scroll"><table class="merchant-table"><thead><tr><th>Merchant</th><th>Category</th><th class="number">Purchases</th><th class="number">Credits</th><th class="number">Net spending</th><th><span class="sr-only">Edit and transaction details</span></th></tr></thead><tbody>
     <?php foreach ($report['merchants'] as $merchant): ?>
-    <tr><td><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?></small></td><td><span class="category-tag"><?= escape($merchant['category']) ?></span><?php if ($merchant['needs_review']): ?><small class="review-label">Needs review</small><?php endif; ?></td><td class="number"><?= money($merchant['expenses']) ?></td><td class="number"><?= $merchant['refunds'] ? money($merchant['refunds']) : '—' ?></td><td class="number"><strong><?= money($merchant['expenses'] - $merchant['refunds']) ?></strong></td><td><a href="#merchant-<?= $merchant['id'] ?>">Edit / details</a></td></tr>
+    <tr><td><strong><?= escape($merchant['name']) ?></strong><small><?= count($merchant['rows']) ?> transaction<?= count($merchant['rows']) === 1 ? '' : 's' ?></small></td><td><span class="category-tag"><?= escape($merchant['category']) ?></span><?php if ($merchant['needs_review']): ?><small class="review-label">Needs review</small><?php endif; ?></td><td class="number"><?= money($merchant['expenses']) ?></td><td class="number"><?= $merchant['refunds'] ? money($merchant['refunds']) : '—' ?></td><td class="number"><strong><?= money($merchant['expenses'] - $merchant['refunds']) ?></strong></td><td><a href="<?= escape(analyzer_url($month, $accountFilter) . '&merchant=' . $merchant['id'] . '#merchant-' . $merchant['id']) ?>">Edit / details</a></td></tr>
     <?php endforeach; ?>
     </tbody><tfoot><tr><th colspan="2">Total</th><td class="number"><?= money($report['expenses']) ?></td><td class="number"><?= money($report['refunds']) ?></td><td class="number"><?= money($report['net']) ?></td><td></td></tr></tfoot></table></div>
     <?php else: ?><p class="empty-inline">No merchants to show for this month.</p><?php endif; ?>
 </section>
-
-<?php if ($report['merchants']): ?>
-<section class="merchant-editors" aria-labelledby="edit-heading"><div class="section-heading"><h2 id="edit-heading">Categories & transaction details</h2><span class="muted">Review or refine your groups</span></div>
-<?php $editMerchants = $report['merchants']; uasort($editMerchants, fn($a, $b) => ($b['needs_review'] <=> $a['needs_review']) ?: strcasecmp($a['name'], $b['name'])); foreach ($editMerchants as $merchant): ?>
-    <details class="merchant-editor" id="merchant-<?= $merchant['id'] ?>" <?= $merchant['needs_review'] ? 'open' : '' ?>>
-        <summary><span><?= escape($merchant['name']) ?><?= $merchant['needs_review'] ? ' · Needs review' : '' ?></span><span><?= escape($merchant['category']) ?></span></summary>
-        <div class="editor-content"><form method="post" action="<?= escape(analyzer_url($month, $accountFilter)) ?>" class="merchant-form">
-            <?php csrf_field(); ?><input type="hidden" name="action" value="save_merchant"><input type="hidden" name="merchant_id" value="<?= $merchant['id'] ?>"><input type="hidden" name="month" value="<?= escape($month) ?>"><input type="hidden" name="account_filter" value="<?= $accountFilter ?>">
-            <div><label for="name-<?= $merchant['id'] ?>">Merchant name</label><input id="name-<?= $merchant['id'] ?>" name="merchant_name" value="<?= escape($merchant['name']) ?>" maxlength="120" required></div>
-            <div><label for="category-<?= $merchant['id'] ?>">Category</label><select id="category-<?= $merchant['id'] ?>" name="category_id"><?php foreach ($categories as $category): ?><option value="<?= (int) $category['id'] ?>" <?= (int) $category['id'] === $merchant['category_id'] ? 'selected' : '' ?>><?= escape($category['name']) ?></option><?php endforeach; ?></select></div>
-            <div><label for="custom-<?= $merchant['id'] ?>">Or add a category</label><input id="custom-<?= $merchant['id'] ?>" name="custom_category" maxlength="80" placeholder="Your own category"></div>
-            <button type="submit">Save<?= $merchant['needs_review'] ? ' & confirm' : ' changes' ?></button>
-        </form><p class="hint">A new category overrides the dropdown. Using another existing merchant’s name merges both groups and applies this category across your reports.</p>
-        <div class="table-scroll"><table class="transaction-table"><thead><tr><th>Date</th><th>Original description</th><th>Card</th><th>Type</th><th class="number">Amount</th></tr></thead><tbody>
-        <?php foreach (array_slice($merchant['rows'], 0, 100) as $transaction): ?><tr><td class="nowrap"><?= escape($transaction['transaction_date']) ?></td><td class="description-cell"><?= escape($transaction['description']) ?></td><td><?= escape($transaction['account']) ?></td><td><?= $transaction['kind'] === 'expense' ? 'Purchase' : 'Credit' ?></td><td class="number"><?= money(abs((int) $transaction['amount_cents'])) ?></td></tr><?php endforeach; ?>
-        </tbody></table></div><?php if (count($merchant['rows']) > 100): ?><p class="hint">Showing the latest 100 transactions. Totals include all <?= count($merchant['rows']) ?>.</p><?php endif; ?></div>
-    </details>
-<?php endforeach; ?></section>
-<?php endif; ?>
 
 <?php if ($report['payment_rows']): ?><details class="panel payments"><summary>Card payments · <?= money($report['payments']) ?> excluded from spending</summary><div class="table-scroll"><table><thead><tr><th>Date</th><th>Card</th><th class="number">Payment</th></tr></thead><tbody><?php foreach ($report['payment_rows'] as $payment): ?><tr><td><?= escape($payment['transaction_date']) ?></td><td><?= escape($payment['account']) ?></td><td class="number"><?= money((int) $payment['amount_cents']) ?></td></tr><?php endforeach; ?></tbody></table></div></details><?php endif; ?>
 <?php elseif ($report !== null): ?>

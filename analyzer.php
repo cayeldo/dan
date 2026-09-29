@@ -358,7 +358,7 @@ function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0)
     if ($accountId > 0) { $sql .= ' AND t.account_id = ?'; $params[] = $accountId; }
     $rows = analyzer_query($db, $sql . ' ORDER BY t.transaction_date DESC, t.id DESC', $params)->fetchAll();
     $report = ['expenses' => 0, 'refunds' => 0, 'payments' => 0, 'count' => count($rows), 'purchase_count' => 0,
-        'merchants' => [], 'categories' => [], 'payment_rows' => [], 'review_count' => 0];
+        'merchants' => [], 'categories' => [], 'category_groups' => [], 'payment_rows' => [], 'review_count' => 0];
     foreach ($rows as $row) {
         $amount = abs((int) $row['amount_cents']);
         if ($row['kind'] === 'payment') { $report['payments'] += $amount; $report['payment_rows'][] = $row; continue; }
@@ -374,6 +374,18 @@ function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0)
     }
     uasort($report['merchants'], fn($a, $b) => $b['expenses'] <=> $a['expenses']);
     arsort($report['categories']);
+    // Include credit-only merchants so every non-payment row can be audited.
+    foreach ($report['merchants'] as $merchant) {
+        $categoryId = $merchant['category_id'];
+        $report['category_groups'][$categoryId] ??= ['id' => $categoryId, 'name' => $merchant['category'],
+            'expenses' => 0, 'refunds' => 0, 'count' => 0, 'review_count' => 0, 'merchant_ids' => []];
+        $report['category_groups'][$categoryId]['expenses'] += $merchant['expenses'];
+        $report['category_groups'][$categoryId]['refunds'] += $merchant['refunds'];
+        $report['category_groups'][$categoryId]['count'] += count($merchant['rows']);
+        $report['category_groups'][$categoryId]['review_count'] += (int) $merchant['needs_review'];
+        $report['category_groups'][$categoryId]['merchant_ids'][] = $merchant['id'];
+    }
+    uasort($report['category_groups'], fn($a, $b) => ($b['expenses'] <=> $a['expenses']) ?: strcasecmp($a['name'], $b['name']));
     $report['review_count'] = count(array_filter($report['merchants'], fn($m) => $m['needs_review']));
     $report['net'] = $report['expenses'] - $report['refunds'];
     return $report;

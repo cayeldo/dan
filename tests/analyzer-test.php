@@ -77,6 +77,11 @@ check($report['expenses'] === 10550 && $report['refunds'] === 500 && $report['pa
 $redRobin = array_values(array_filter($report['merchants'], fn($m) => $m['name'] === 'Red Robin'))[0];
 check($redRobin['expenses'] === 2050 && count($redRobin['rows']) === 3, 'same-day equal-value purchases with separate references are preserved');
 check(array_sum($report['categories']) === $report['expenses'], 'chart and spending totals reconcile exactly');
+check(array_sum(array_column($report['category_groups'], 'expenses')) === $report['expenses']
+    && array_sum(array_column($report['category_groups'], 'refunds')) === $report['refunds'], 'category audit totals reconcile purchases and credits');
+$restaurantGroup = $report['category_groups'][$redRobin['category_id']];
+check($restaurantGroup['merchant_ids'] === [$redRobin['id']] && $restaurantGroup['count'] === 3
+    && $restaurantGroup['expenses'] === 2050 && $restaurantGroup['refunds'] === 500, 'category audit links merchant totals to every underlying transaction');
 check(monthly_report($db, 2, '2026-08')['count'] === 0 && user_accounts($db, 2) === [], 'another user cannot see uploaded data');
 rejects(fn() => save_import($db, 2, $pending), 'another user cannot import into a foreign account');
 rejects(fn() => update_merchant($db, 2, $redRobin['id'], 'Stolen', $redRobin['category_id'], ''), 'another user cannot edit a foreign merchant');
@@ -106,6 +111,10 @@ check(parse_statement("\xEF\xBB\xBFDate,Description,Amount\r\n8/1/26,\"Shop, Inc
 check(save_import($db, 2, pending_csv($csv))['added'] === 6, 'each user can independently import their own copy');
 check(monthly_report($db, 2, '2026-08')['categories']['Restaurants'] === 2050, 'one user’s category rules do not affect another user');
 check(monthly_report($db, 2, '2026-08', $accountId)['count'] === 0, 'foreign card filter cannot expose another user’s data');
+save_import($db, 1, pending_csv("Date,Name,Amount\n10/1/26,Refund Only Shop,12.00\n", $accountId));
+$creditOnly = monthly_report($db, 1, '2026-10');
+check($creditOnly['categories'] === [] && count($creditOnly['category_groups']) === 1
+    && array_sum(array_column($creditOnly['category_groups'], 'refunds')) === 1200, 'credit-only categories remain auditable even without a pie slice');
 
 if (isset($argv[1])) {
     $sample = parse_statement(file_get_contents($argv[1]));

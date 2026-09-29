@@ -5,6 +5,7 @@ No production code, credentials, or user accounts are modified.
 """
 import contextlib
 import http.cookiejar
+from html.parser import HTMLParser
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,31 @@ import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+
+class AuditDetails(HTMLParser):
+    """Inspect semantic category/merchant nesting in the rendered response."""
+    def __init__(self, page):
+        super().__init__()
+        self.stack = []
+        self.nodes = {}
+        self.feed(page)
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'details':
+            attrs = dict(attrs)
+            node = {'id': attrs.get('id', ''), 'parent': self.stack[-1]['id'] if self.stack else '',
+                    'text': '', 'open': 'open' in attrs}
+            self.stack.append(node)
+            if node['id']:
+                self.nodes[node['id']] = node
+
+    def handle_data(self, data):
+        for node in self.stack:
+            node['text'] += data
+
+    def handle_endtag(self, tag):
+        if tag == 'details':
+            self.stack.pop()
 
 
 def check(condition, message):
@@ -124,6 +150,18 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
         check(status == 200 and '5 transactions saved. 0 duplicates skipped.' in report, 'confirm saves import')
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
         check('A few categories need your input.' in report and 'CURIOUS SHOP' in report, 'unknown merchant prompts for category review')
+        audit = AuditDetails(report).nodes
+        robin = next(node for key, node in audit.items() if key.startswith('merchant-') and 'RED ROBIN NO 360' in node['text'])
+        restaurant = audit[robin['parent']]
+        check(restaurant['id'].startswith('category-') and 'Restaurants' in restaurant['text']
+              and '$30.00' in restaurant['text'] and 'UBER *EATS' not in restaurant['text'], 'category expands into only its own rolled-up merchants')
+        check('2026-08-01' in robin['text'] and '2026-08-02' in robin['text']
+              and 'RED ROBIN 23' in robin['text'] and '$10.00' in robin['text'] and '$20.00' in robin['text'], 'merchant expands into individual dated charges')
+        status, category_open, _ = request('/?page=analyzer&month=2026-08&category=' + restaurant['id'].split('-')[1])
+        check(status == 200 and AuditDetails(category_open).nodes[restaurant['id']]['open'], 'chart category link opens the matching audit group')
+        status, merchant_open, _ = request('/?page=analyzer&month=2026-08&merchant=' + robin['id'].split('-')[1])
+        opened = AuditDetails(merchant_open).nodes
+        check(status == 200 and opened[restaurant['id']]['open'] and opened[robin['id']]['open'], 'merchant details link opens both disclosure levels')
         edit_id = re.search(r'id="name-(\d+)" name="merchant_name" value="Curious Shop"', report).group(1)
         status, updated, _ = request('/?page=analyzer', {'csrf': csrf, 'action': 'save_merchant', 'merchant_id': edit_id, 'merchant_name': '<script>alert(1)</script>', 'category_id': 0, 'custom_category': 'My custom category', 'month': '2026-08', 'account_filter': 0})
         check(status == 200 and 'My custom category' in updated and '&lt;script&gt;alert(1)&lt;/script&gt;' in updated and '<script>alert(1)</script>' not in updated, 'custom category saves and user-entered names are escaped')
@@ -141,6 +179,11 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
             check(status == 200 and '136 transactions saved' in sample_report and '$2,277.45' in sample_report, 'provided sample saves and opens September report')
             status, august, _ = request('/?page=analyzer&month=2026-08&account=2')
             check(status == 200 and '$2,217.46' in august and 'Food Delivery' in august, 'month and card filters reconcile sample August report')
+            sample_audit = AuditDetails(sample_report).nodes
+            costco = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'COSTCO WHSE' in node['text'])
+            harris = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'HARRIS TEETER' in node['text'])
+            check(costco['parent'] == harris['parent'] and 'Groceries' in sample_audit[costco['parent']]['text']
+                  and 'COSTCO GAS' not in sample_audit[costco['parent']]['text'], 'sample Groceries audit groups Costco and Harris Teeter separately from fuel')
         status, login, _ = request('/', {'csrf': csrf, 'action': 'logout'})
         check('autocomplete="current-password"' in login, 'sign-out returns to login')
         status, protected, _ = request('/?page=analyzer')
