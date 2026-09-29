@@ -37,6 +37,11 @@ function escape(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+if (isset($_SESSION['user'])) {
+    require __DIR__ . '/portal.php';
+    exit;
+}
+
 $setup = ($_GET['mode'] ?? '') === 'setup';
 $error = null;
 $username = '';

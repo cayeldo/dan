@@ -30,12 +30,19 @@ fi
 # Update the local checkout to exactly match GitHub main.
 git reset --hard origin/main
 
+# Apply additive schema changes before the new PHP files are served.
+if [ -f "$REPO_DIR/deploy/migrate.php" ]; then
+    sudo -u "$DEPLOY_USER" env DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
+        php "$REPO_DIR/deploy/migrate.php"
+fi
+
 # Make sure the web directory exists.
 install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$WEB_DIR"
 
 # Deploy the application, but don't expose Git metadata or deployment files.
 rsync -a --delete \
     --exclude='.git/' \
+    --exclude='.DS_Store' \
     --exclude='deploy/' \
     --exclude='database/' \
     --exclude='tests/' \

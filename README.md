@@ -25,7 +25,7 @@ Setup codes expire after 24 hours and are consumed on use. Re-run the command to
 - Passwords must be 12–72 bytes; the byte limit avoids bcrypt truncation, and Unicode characters may occupy multiple bytes. Spaces are preserved.
 - Setup codes use 32 random bytes; only their SHA-256 hashes are stored. Codes prove ownership before a password can be created, preventing a visitor from claiming `don` or `dan` by knowing the name.
 - Prepared statements, CSRF tokens, session ID rotation, HTTPS-only production access, HttpOnly/SameSite cookies, a 30-minute inactivity timeout, and a 15-minute account lock after five failed attempts protect sign-in and setup. Account locks persist across browsers.
-- The signed-in screen is a protected welcome page with sign-out; no other app functionality was requested yet. Future private routes must perform their own session checks.
+- Signing in opens a personalized portal. The credit card analyzer, reports, and uploaded records are private to the signed-in account.
 - Dates written by the application are UTC. If TLS terminates at a proxy, configure the trusted server to report HTTPS to PHP; do not trust arbitrary forwarded headers.
 
 ## Local checks
@@ -39,3 +39,30 @@ php -S 127.0.0.1:8080
 ```
 
 The login and setup pages render without a database. Successful account operations require the imported MySQL database and private connection settings. The local PHP development server allows HTTP; production requires HTTPS. No real database was configured or seeded by merely adding these files.
+
+## Credit card analyzer
+
+Run the additive migration once before serving this feature (the deployment script also runs it automatically before copying new files):
+
+```sh
+DAN_CONFIG=/home/cayeldo/domains/dan.cayelli.us/dan-config.php php deploy/migrate.php
+```
+
+The equivalent SQL is `database/analyzer.sql`. It creates categories, card accounts, merchants, merchant aliases, imports, and individual transactions without altering login accounts. Records are scoped to a user, and imported data is never shared between Don and Dan.
+
+Open **Credit card analyzer**, choose or name a card, select the CSV's charge sign convention, and preview the upload. Nothing is written until **Save transactions**. Files spanning multiple months produce separate calendar-month reports using transaction dates. The original description, memo, date, signed amount in cents, bank reference, and import provenance are retained. Uploaded CSV files themselves are not retained; previews expire after 30 minutes.
+
+Supported input is a UTF-8, comma-separated CSV (up to 2 MB / 10,000 rows) with `Date`, `Name` (or `Description` / `Merchant`), and `Amount`; `Transaction`, `Memo`, and `Transaction ID` / `Reference Number` are optional. Dates accept US M/D/YY, M/D/YYYY, or ISO YYYY-MM-DD. Currency is USD in this first version. Purchases can be signed negative or positive, selected before import. Recognized card payment descriptions are excluded from spending; other credits are shown as refunds/credits. The pie chart shows gross purchases; the separate net figure subtracts credits.
+
+Merchant rules distinguish Uber Eats / Uber Trip, Costco / Costco Gas, and food-delivery services from restaurant names. Store variants such as Red Robin 23 and Red Robin No 360 roll up together. Rules are local and deterministic: no transaction data is sent to an AI or external categorization service. Unknown businesses receive an MCC-based suggestion when possible, or Uncategorized, and are marked for review. Every merchant can be renamed or assigned a dropdown/custom category. Corrections apply across that user's historical reports and future matches. Renaming to an existing merchant explicitly merges both groups, retaining source transactions and matching aliases.
+
+Duplicate protection is scoped to the same user and card. Bank transaction IDs (including the numeric first field of this bank's Memo) are preferred. Without IDs, matching uses date, normalized description, signed amount, kind, and within-file occurrence count. This preserves repeated equal-value purchases within a file. Separate overlapping files containing indistinguishable same-day purchases without bank IDs cannot be perfectly disambiguated; the preview discloses this limitation. Reuse the same card entry for repeat/overlapping exports. A row with a reused bank ID but different financial data rejects the entire import. Account row locks and unique database keys protect concurrent imports; all statement writes are transactional.
+
+### Analyzer verification
+
+```sh
+php tests/analyzer-test.php
+python3 tests/web-test.py
+```
+
+An optional local sample path can be passed to either test command. The provided sample is never committed or seeded into a real user's account. Tests use disposable data, cover the full upload/preview/save/report flow, and check duplicate protection, custom categories, explicit merges, malformed rows, XSS escaping, CSRF, totals, and tenant isolation. The default SQLite test adapter omits MySQL row-lock syntax. To check the actual MySQL schema, use a disposable database whose name starts with `dan_test_` and set `ANALYZER_TEST_DSN`, `ANALYZER_TEST_USER`, and `ANALYZER_TEST_PASSWORD` for `tests/analyzer-test.php`.

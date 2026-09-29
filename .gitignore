@@ -2,3 +2,4 @@
 .env.*
 dan-config.php
 *.log
+.DS_Store

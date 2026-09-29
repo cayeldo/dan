@@ -9,7 +9,7 @@ function database(): PDO
     if (!is_string($password) || $password === '') {
         throw new RuntimeException('Database password has not been configured.');
     }
-    return new PDO(
+    $db = new PDO(
         sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4',
             $config['host'] ?? 'localhost', $config['database'] ?? 'cayeldo_dan'),
         $config['username'] ?? 'cayeldo_dan',
@@ -18,6 +18,8 @@ function database(): PDO
          PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
          PDO::ATTR_EMULATE_PREPARES => false]
     );
+    $db->exec("SET time_zone = '+00:00'");
+    return $db;
 }
 
 function password_error(string $password, string $confirmation): ?string
