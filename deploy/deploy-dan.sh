@@ -37,6 +37,12 @@ install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$WEB_DIR"
 rsync -a --delete \
     --exclude='.git/' \
     --exclude='deploy/' \
+    --exclude='database/' \
+    --exclude='tests/' \
+    --exclude='README.md' \
+    --exclude='.gitignore' \
+    --exclude='.env*' \
+    --exclude='dan-config.php' \
     --exclude='.dan-deployed' \
     "$REPO_DIR/" "$WEB_DIR/"
 
