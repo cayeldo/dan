@@ -4,6 +4,7 @@ if (!isset($_SESSION['user'])) { http_response_code(403); exit; }
 define('DAN_PORTAL', true);
 require __DIR__ . '/analyzer.php';
 require __DIR__ . '/analytics.php';
+require __DIR__ . '/monthly-reviews.php';
 require __DIR__ . '/admin.php';
 
 $userId = (int) $_SESSION['user']['id'];
@@ -19,7 +20,7 @@ $accounts = []; $categories = []; $months = []; $imports = []; $report = null; $
 $accountFilter = max(0, (int) (is_scalar($_GET['account'] ?? null) ? $_GET['account'] : 0));
 $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
 $requestedMonth = $month;
-$history = []; $dashboard = null; $comparison = null;
+$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = [];
 $pending = $_SESSION['pending_import'] ?? null;
 if ($pending && ($pending['user_id'] !== $userId || time() - $pending['created_at'] > 1800)) {
     unset($_SESSION['pending_import']); $pending = null;
@@ -90,6 +91,23 @@ try {
         } elseif ($action === 'discard_import') {
             if ($pending && !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview was replaced. Reload before discarding it.'); }
             unset($_SESSION['pending_import']); header('Location: /?page=statements', true, 303); exit;
+        } elseif ($action === 'confirm_months') {
+            if (input('coverage_confirmed') !== '1') { throw new InvalidArgumentException('Confirm that all posted transactions for every imported card are present.'); }
+            $count = confirm_complete_months($db, $userId, input('complete_from'), input('complete_through'));
+            $_SESSION['notice'] = $count . ' months confirmed complete. Their reviews will be saved automatically once prepared.';
+            header('Location: /?page=statements&reviews=1#complete-months', true, 303); exit;
+        } elseif ($action === 'reopen_month') {
+            $reviewMonth = input('review_month');
+            analyzer_query($db, 'UPDATE analyzer_month_closures SET complete = 0 WHERE user_id = ? AND month = ?', [$userId, $reviewMonth]);
+            $_SESSION['notice'] = 'Month marked incomplete. Its saved review is hidden.';
+            header('Location: /?page=statements&reviews=1#complete-months', true, 303); exit;
+        } elseif ($action === 'retry_month_review') {
+            $reviewMonth = input('review_month');
+            if (!month_is_complete($db, $userId, $reviewMonth)) { throw new InvalidArgumentException('Confirm this month is complete before retrying.'); }
+            // Successful reviews can never be regenerated through this action.
+            analyzer_query($db, "UPDATE analyzer_month_reviews SET status = 'pending' WHERE user_id = ? AND month = ? AND status = 'failed'", [$userId, $reviewMonth]);
+            $_SESSION['notice'] = 'Review retry requested. The saved result will appear when ready.';
+            redirect_analyzer($reviewMonth);
         } elseif ($action === 'save_merchant') {
             update_merchant($db, $userId, (int) input('merchant_id'), input('merchant_name'), (int) input('category_id'), input('custom_category'));
             $_SESSION['notice'] = 'Merchant and category saved. This applies to your past reports and future matching transactions.';
@@ -116,9 +134,15 @@ if (in_array($page, ['analyzer', 'statements'], true)) {
             $report = monthly_report($db, $userId, $month, $accountFilter);
             $history = spending_history($db, $userId, $accountFilter);
             $comparison = spending_comparison($history, $month);
+            if ($accountFilter === 0 || count($accounts) === 1) { $monthlyReview = saved_month_review($db, $userId, $month); }
             $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
         }
         $imports = analyzer_query($db, 'SELECT i.*, a.label AS account FROM analyzer_imports i JOIN analyzer_accounts a ON a.id = i.account_id WHERE i.user_id = ? ORDER BY i.id DESC LIMIT 5', [$userId])->fetchAll();
+        if ($page === 'statements') {
+            $months = report_months($db, $userId);
+            $closedMonths = analyzer_query($db, 'SELECT c.*, r.status AS review_status FROM analyzer_month_closures c LEFT JOIN analyzer_month_reviews r ON r.user_id = c.user_id AND r.month = c.month WHERE c.user_id = ? ORDER BY c.month DESC', [$userId])->fetchAll();
+            foreach ($closedMonths as &$closed) { $closed['complete'] = month_is_complete($db, $userId, $closed['month']); } unset($closed);
+        }
         if ($pending && $page === 'statements') { $preview = preview_import($db, $userId, $pending); }
     } catch (InvalidArgumentException $exception) { $error = $exception->getMessage(); }
     catch (Throwable $exception) {
@@ -128,8 +152,14 @@ if (in_array($page, ['analyzer', 'statements'], true)) {
 }
 if ($page === 'home') {
     try {
-        $history = spending_history(database(), $userId);
+        $homeDb = database();
+        $history = spending_history($homeDb, $userId);
         $dashboard = spending_dashboard($history);
+        $savedMonths = analyzer_query($homeDb, "SELECT month FROM analyzer_month_reviews WHERE user_id = ? AND status = 'completed' ORDER BY month DESC LIMIT 12", [$userId])->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($savedMonths as $savedMonth) {
+            $latestReview = saved_month_review($homeDb, $userId, $savedMonth);
+            if ($latestReview) { break; }
+        }
     } catch (Throwable $exception) {
         error_log('Dan dashboard failed: ' . get_class($exception));
         http_response_code(503); $error = 'Your spending overview is temporarily unavailable. Please try again shortly.';

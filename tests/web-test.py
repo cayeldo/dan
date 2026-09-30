@@ -202,6 +202,40 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check('data-tooltip=' in report and '/charts.js' in report, 'category charts expose values through the local tooltip script')
         status, statements, _ = request('/?page=statements')
         check(status == 200 and 'name="statement"' in statements, 'Statements menu provides the upload form')
+        check('id="monthly-review"' not in report, 'incomplete months show no AI review or review placeholder')
+        check(request('/?page=statements', {'action': 'confirm_months', 'csrf': 'wrong'})[0] == 403, 'month completion requires CSRF')
+        complete_fields = {'csrf': csrf, 'action': 'confirm_months', 'complete_from': '2026-08', 'complete_through': '2026-08', 'coverage_confirmed': '1'}
+        current_month = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
+        future_fields = dict(complete_fields, complete_from=current_month, complete_through=current_month)
+        check('current month cannot be marked complete' in request('/?page=statements', future_fields)[1], 'HTTP confirmation rejects the current month')
+        check('months confirmed complete' in request('/?page=statements', complete_fields)[1], 'complete-data confirmation queues a closed month')
+        check('review will appear once prepared' in request('/?page=analyzer&month=2026-08')[1], 'complete month shows a deterministic pending status')
+        (folder / 'review-fixture.php').write_text("""<?php
+require __DIR__ . '/test-database.php';
+require __DIR__ . '/analyzer.php';
+require __DIR__ . '/monthly-reviews.php';
+$db = database();
+$db->exec("UPDATE analyzer_ai_jobs SET status = 'unresolved' WHERE user_id = 1");
+run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</script>', 'summary' => 'Your recorded purchases total $50.', 'bright_spot' => 'You have a clearer view of spending.', 'opportunity' => 'Review dining costs.', 'next_steps' => ['Plan one meal at home.', 'Review the uncategorized purchase.']], ['enabled' => true, 'model' => 'local-test']);
+""")
+        subprocess.run(['php', str(folder / 'review-fixture.php')], check=True)
+        saved_review_page = request('/?page=analyzer&month=2026-08')[1]
+        check('A good start &lt;script&gt;bad()&lt;/script&gt;' in saved_review_page and '<script>bad()</script>' not in saved_review_page, 'saved model output is escaped')
+        check('A good start' in request('/?page=analyzer&month=2026-08')[1], 'repeat report views reuse the saved review')
+        request('/?page=analyzer', {'csrf': csrf, 'action': 'retry_month_review', 'review_month': '2026-08'})
+        check('A good start' in request('/?page=analyzer&month=2026-08')[1], 'retry action cannot regenerate a successful review')
+        request('/?page=statements', {'csrf': csrf, 'action': 'reopen_month', 'review_month': '2026-08'})
+        check('id="monthly-review"' not in request('/?page=analyzer&month=2026-08')[1], 'reopening a month hides all AI content')
+        request('/?page=statements', complete_fields)
+        check('A good start' in request('/?page=analyzer&month=2026-08')[1], 'reconfirming restores the saved review without a new request')
+        if os.environ.get('DAN_PREVIEW_DIR'):
+            destination = Path(os.environ['DAN_PREVIEW_DIR'])
+            (destination / 'review.html').write_text(saved_review_page)
+            (destination / 'review-statements.html').write_text(request('/?page=statements&reviews=1')[1])
+            for script in ROOT.glob('*.js'):
+                shutil.copy(script, destination)
+
+
         status, audit_report, _ = request('/?page=analyzer&month=2026-08&audit=all')
         audit = AuditDetails(audit_report).nodes
         robin = next(node for key, node in audit.items() if key.startswith('merchant-') and 'RED ROBIN NO 360' in node['text'])

@@ -9,6 +9,9 @@
     <div><span>vs <?= escape(month_label(previous_month($latest))) ?></span><strong class="<?= $dashboard['comparison']['available'] ? ($dashboard['comparison']['total']['delta'] > 0 ? 'change-up' : 'change-down') : '' ?>"><?= $dashboard['comparison']['available'] ? signed_money($dashboard['comparison']['total']['delta']) : '—' ?></strong></div>
     <div><span>All-time purchases</span><strong><?= money($dashboard['expenses']) ?></strong></div>
 </section>
+<?php if ($latestReview && !$latestReview['stale']): ?>
+<section class="panel monthly-review-teaser"><div><div class="eyebrow"><?= escape(month_label($latestReview['month'])) ?> · AI REVIEW</div><h2><?= escape($latestReview['result']['headline']) ?></h2><p class="hint"><?= escape($latestReview['result']['summary']) ?></p></div><a class="button secondary" href="<?= escape(analyzer_url($latestReview['month']) . '#monthly-review') ?>">Read review ↗</a></section>
+<?php endif; ?>
 <div class="dashboard-grid">
 <section class="panel trend-panel" aria-labelledby="trend-heading">
     <div class="section-heading"><h2 id="trend-heading">Monthly spending</h2><span class="pill"><?= count($dashboard['series']) ?> months</span></div>

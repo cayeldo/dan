@@ -124,3 +124,33 @@ CREATE TABLE IF NOT EXISTS analyzer_simplefin_history (
     CONSTRAINT simplefin_history_account FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE,
     CONSTRAINT simplefin_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A past month needs explicit coverage evidence, not merely some transactions.
+CREATE TABLE IF NOT EXISTS analyzer_month_closures (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    complete TINYINT(1) NOT NULL DEFAULT 1,
+    data_hash CHAR(64) NOT NULL,
+    source VARCHAR(24) NOT NULL,
+    confirmed_at DATETIME NOT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- One persisted review per person and calendar month, across their imported cards.
+CREATE TABLE IF NOT EXISTS analyzer_month_reviews (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    input_json MEDIUMTEXT DEFAULT NULL,
+    input_hash CHAR(64) DEFAULT NULL,
+    result_json MEDIUMTEXT DEFAULT NULL,
+    model VARCHAR(80) DEFAULT NULL,
+    prompt_version INT UNSIGNED NOT NULL DEFAULT 1,
+    attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    started_at DATETIME DEFAULT NULL,
+    completed_at DATETIME DEFAULT NULL,
+    last_error VARCHAR(32) DEFAULT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
