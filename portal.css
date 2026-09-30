@@ -276,7 +276,7 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .month-tile small { font-size: .7rem; color: #56657b; }
 .month-tile:hover, .month-tile:focus-visible { background: #edf2ff; outline: 2px solid #7899e9; outline-offset: 2px; }
 .month-tile.in-progress > span { color: #244fc9; font-weight: 700; }
-.shift-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.shift-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
 .shift-card { display: flex; flex-direction: column; gap: 14px; padding: 20px; background: #f7f9fc; border: 1px solid #e8edf4; border-radius: 12px; color: #253b60; text-decoration: none; }
 .shift-card:hover { border-color: #7899e9; background: #f0f4fc; }
 .shift-card > span { font-size: .875rem; }

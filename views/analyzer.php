@@ -13,7 +13,7 @@
     <?php if ($report['expenses'] > 0):
         $chartId = 'monthly'; $chartTitle = 'Spending by category for ' . month_label($month); $chartTotal = $report['expenses']; $chartItems = [];
         $categoryIds = array_column($report['category_groups'], 'id', 'name');
-        foreach ($report['categories'] as $name => $amount) { $chartItems[] = ['name' => $name, 'amount' => $amount, 'url' => analyzer_url($month, $accountFilter) . '&category=' . $categoryIds[$name] . '#category-' . $categoryIds[$name]]; }
+        foreach ($report['categories'] as $name => $amount) { $chartItems[] = ['id' => $categoryIds[$name], 'name' => $name, 'amount' => $amount, 'url' => analyzer_url($month, $accountFilter) . '&category=' . $categoryIds[$name] . '#category-' . $categoryIds[$name]]; }
         require __DIR__ . '/category-chart.php';
     else: ?><p class="empty-inline">No purchases in this month.</p><?php endif; ?>
     <div class="chart-footer"><span>Refunds &amp; credits <strong class="change-down"><?= money($report['refunds']) ?></strong></span><span>Net spending <strong><?= money($report['net']) ?></strong></span><a href="<?= escape(analyzer_url($month, $accountFilter) . '&audit=all#audit-heading') ?>">Browse categories</a></div>
