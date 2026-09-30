@@ -7,7 +7,7 @@ require __DIR__ . '/analytics.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'plaid', 'connect'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'connect'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -33,7 +33,6 @@ function redirect_analyzer(string $month = '', int $account = 0): never
     header('Location: ' . analyzer_url($month, $account), true, 303); exit;
 }
 
-if ($page === 'plaid') { require __DIR__ . '/plaid-controller.php'; }
 if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
@@ -135,7 +134,7 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'plaid' ? 'Connect Credit Card · Sandbox' : ($page === 'connect' ? 'Connect your card' : 'Credit card analyzer')) ?> · Dan</title>
+    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'connect' ? 'Connect your card' : 'Credit card analyzer') ?> · Dan</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/portal.css">
 </head>

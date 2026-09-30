@@ -37,15 +37,6 @@ function escape(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-$plaidNonce = bin2hex(random_bytes(16));
-if (($_GET['page'] ?? '') === 'plaid' && isset($_GET['api']) && !isset($_SESSION['user'])) {
-    http_response_code(401); header('Content-Type: application/json');
-    echo '{"error":"Sign in before connecting a card."}'; exit;
-}
-if (($_GET['page'] ?? '') === 'plaid' && isset($_SESSION['user'])) {
-    header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$plaidNonce' https://cdn.plaid.com/link/v2/stable/link-initialize.js; style-src 'self' 'nonce-$plaidNonce'; style-src-attr 'unsafe-inline'; frame-src https://cdn.plaid.com; connect-src 'self' https://sandbox.plaid.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
-}
-
 if (isset($_SESSION['user'])) {
     require __DIR__ . '/portal.php';
     exit;

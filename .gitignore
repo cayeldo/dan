@@ -5,6 +5,7 @@ dan-ai.json
 *.log
 .DS_Store
 
+# Keep retired private credentials out of source control.
 plaid.env
 plaid-items/
 simplefin/
