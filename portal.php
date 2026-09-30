@@ -142,9 +142,9 @@ if ($page === 'home') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'admin' ? 'User administration' : ($page === 'connect' ? 'Connect your card' : ($page === 'statements' ? 'Statements' : 'Credit card analyzer'))) ?> · Dan</title>
-    <link rel="stylesheet" href="/styles.css">
-    <link rel="stylesheet" href="/portal.css">
-    <script src="/charts.js" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
+    <link rel="stylesheet" href="/portal.css?v=<?= substr(hash_file('sha256', __DIR__ . '/portal.css'), 0, 16) ?>">
+    <script src="/charts.js?v=<?= substr(hash_file('sha256', __DIR__ . '/charts.js'), 0, 16) ?>" defer></script>
 </head>
 <body class="workspace">
 <header class="topbar">

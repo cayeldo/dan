@@ -94,7 +94,7 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Sign in to Dan.">
     <title><?= escape($title) ?> · Dan</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
 </head>
 <body>
 <header class="brand"><a href="/" aria-label="Dan home">dan<span>.</span></a><span class="brand-label">YOUR PRIVATE SPACE</span></header>

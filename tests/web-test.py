@@ -7,6 +7,7 @@ import base64
 import contextlib
 import datetime
 import http.cookiejar
+import hashlib
 from html.parser import HTMLParser
 import os
 from pathlib import Path
@@ -151,6 +152,17 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check(status == 200 and 'Welcome back' in login, 'login page renders')
         status, portal, _ = request('/', {'csrf': token(login), 'username': 'first_test_user', 'password': 'test-only-passphrase'})
         check(status == 200 and 'Welcome back, First_test_user.' in portal and 'Open analyzer' in portal, 'login opens personalized portal')
+        for asset in ['styles.css', 'portal.css', 'charts.js']:
+            version = hashlib.sha256((folder / asset).read_bytes()).hexdigest()[:16]
+            check(f'/{asset}?v={version}' in portal, f'{asset} URL is versioned by its deployed contents')
+        old_version = hashlib.sha256((folder / 'portal.css').read_bytes()).hexdigest()[:16]
+        with (folder / 'portal.css').open('a') as changed_css:
+            changed_css.write('\n/* simulate the next deployment */\n')
+        next_portal = request('/')[1]
+        next_version = hashlib.sha256((folder / 'portal.css').read_bytes()).hexdigest()[:16]
+        check(next_version != old_version and f'/portal.css?v={next_version}' in next_portal,
+              'a stylesheet deployment changes its URL so cached older CSS cannot be reused')
+
         status, empty, _ = request('/?page=analyzer')
         check(status == 200 and 'first monthly report' in empty, 'analyzer empty state renders')
         check('A few charts. A clearer picture.' in portal, 'new user sees an empty overview without invented totals')
