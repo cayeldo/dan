@@ -237,6 +237,8 @@ function duplicate_matches(PDO $db, int $userId, int $accountId, array $rows): a
         $placeholders = implode(',', array_fill(0, count($keys), '?'));
         $found = analyzer_query($db, "SELECT dedupe_key, transaction_date, amount_cents, kind FROM analyzer_transactions WHERE user_id = ? AND account_id = ? AND dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
         foreach ($found as $row) { $existing[$row['dedupe_key']] = $row; }
+        $aliases = analyzer_query($db, "SELECT a.dedupe_key, t.transaction_date, t.amount_cents, t.kind FROM analyzer_csv_feed_matches a JOIN analyzer_transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id AND t.account_id = a.account_id WHERE a.user_id = ? AND a.account_id = ? AND a.dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
+        foreach ($aliases as $row) { $existing[$row['dedupe_key']] = $row; }
     }
     return $existing;
 }
@@ -249,22 +251,50 @@ function check_duplicate(array $row, array $existing): void
     }
 }
 
-/** CSV references and bank-feed IDs differ, so their date ranges must not overlap. */
-function check_csv_cutoff(PDO $db, int $userId, int $accountId, array $rows): void
+/** Use source descriptions, not editable categories or merchant names, for matching. */
+function csv_feed_signature(string $date, int $amount, string $kind, string $description): string
 {
-    if (!$accountId) { return; }
+    $merchant = classify_merchant($description);
+    $name = $kind !== 'payment' && !$merchant['needs_review'] ? $merchant['name'] : $description;
+    return hash('sha256', json_encode([$date, $amount, $kind, merchant_match_key($name)], JSON_THROW_ON_ERROR));
+}
+
+/** Match overlap one-to-one; never silently discard an unmatched or ambiguous charge. */
+function csv_import_matches(PDO $db, int $userId, int $accountId, array $rows): array
+{
+    $matches = duplicate_matches($db, $userId, $accountId, $rows);
+    if (!$accountId) { return $matches; }
     $cutoff = analyzer_query($db, 'SELECT start_date FROM analyzer_simplefin_history WHERE user_id = ? AND account_id = ?', [$userId, $accountId])->fetchColumn();
-    if ($cutoff) {
-        foreach ($rows as $row) {
-            if ($row['date'] >= $cutoff) { throw new InvalidArgumentException('This card uses automatic imports from ' . $cutoff . '. Upload only earlier CSV history to avoid duplicates.'); }
-        }
+    if (!$cutoff) { return $matches; }
+    $groups = [];
+    foreach ($rows as $row) {
+        if (isset($matches[$row['dedupe_key']])) { check_duplicate($row, $matches[$row['dedupe_key']]); continue; }
+        if ($row['date'] < $cutoff) { continue; }
+        $signature = csv_feed_signature($row['date'], $row['amount'], $row['kind'], $row['description']);
+        $groups[$signature][$row['dedupe_key']] = $row;
     }
+    if (!$groups) { return $matches; }
+    $dates = array_column($rows, 'date');
+    $feed = analyzer_query($db, "SELECT t.id, t.transaction_date, t.amount_cents, t.kind, t.description, a.dedupe_key AS csv_key FROM analyzer_transactions t LEFT JOIN analyzer_csv_feed_matches a ON a.transaction_id = t.id AND a.user_id = t.user_id AND a.account_id = t.account_id WHERE t.user_id = ? AND t.account_id = ? AND t.bank_reference LIKE 'sfin:%' AND t.transaction_date >= ? AND t.transaction_date <= ?", [$userId, $accountId, $cutoff, max($dates)])->fetchAll();
+    $candidates = [];
+    foreach ($feed as $transaction) {
+        $signature = csv_feed_signature($transaction['transaction_date'], (int) $transaction['amount_cents'], $transaction['kind'], $transaction['description']);
+        $candidates[$signature][] = $transaction;
+    }
+    foreach ($groups as $signature => $group) {
+        $row = reset($group);
+        $found = $candidates[$signature] ?? [];
+        if (count($group) !== 1 || count($found) !== 1 || $found[0]['csv_key'] !== null) {
+            throw new InvalidArgumentException('A CSV transaction dated ' . $row['date'] . ' could not be uniquely matched to a saved automatic import. This card uses automatic imports from ' . $cutoff . '. Nothing was imported. Refresh the bank feed, or upload only earlier CSV history.');
+        }
+        $matches[$row['dedupe_key']] = $found[0] + ['new_alias' => true];
+    }
+    return $matches;
 }
 
 function preview_import(PDO $db, int $userId, array $pending): array
 {
-    check_csv_cutoff($db, $userId, (int) $pending['account_id'], $pending['rows']);
-    $matches = duplicate_matches($db, $userId, (int) $pending['account_id'], $pending['rows']);
+    $matches = csv_import_matches($db, $userId, (int) $pending['account_id'], $pending['rows']);
     $savedRules = analyzer_query($db, 'SELECT a.match_key, m.name, c.name AS category, m.needs_review FROM analyzer_aliases a JOIN analyzer_merchants m ON m.id = a.merchant_id JOIN analyzer_categories c ON c.id = m.category_id WHERE a.user_id = ?', [$userId])->fetchAll();
     $rules = array_column($savedRules, null, 'match_key');
     $result = ['added' => 0, 'skipped' => 0, 'expenses' => 0, 'refunds' => 0, 'payments' => 0, 'fallback' => 0, 'groups' => [], 'months' => []];
@@ -305,7 +335,7 @@ function save_import(PDO $db, int $userId, array $pending): array
                 $accountId = (int) $db->lastInsertId();
             }
         }
-        check_csv_cutoff($db, $userId, $accountId, $pending['rows']);
+        $matches = csv_import_matches($db, $userId, $accountId, $pending['rows']);
         $previous = analyzer_query($db, 'SELECT id FROM analyzer_imports WHERE account_id = ? AND file_hash = ?', [$accountId, $pending['file_hash']])->fetchColumn();
         if ($previous !== false) {
             $db->commit();
@@ -315,10 +345,16 @@ function save_import(PDO $db, int $userId, array $pending): array
         analyzer_query($db, 'INSERT INTO analyzer_imports (user_id, account_id, filename, file_hash, row_count) VALUES (?, ?, ?, ?, ?)',
             [$userId, $accountId, $pending['filename'], $pending['file_hash'], count($pending['rows'])]);
         $importId = (int) $db->lastInsertId();
-        $matches = duplicate_matches($db, $userId, $accountId, $pending['rows']);
         $added = 0; $skipped = 0;
         foreach ($pending['rows'] as $row) {
-            if (isset($matches[$row['dedupe_key']])) { check_duplicate($row, $matches[$row['dedupe_key']]); $skipped++; continue; }
+            if (isset($matches[$row['dedupe_key']])) {
+                check_duplicate($row, $matches[$row['dedupe_key']]);
+                if (!empty($matches[$row['dedupe_key']]['new_alias'])) {
+                    analyzer_query($db, 'INSERT INTO analyzer_csv_feed_matches (user_id, account_id, transaction_id, dedupe_key) VALUES (?, ?, ?, ?)', [$userId, $accountId, $matches[$row['dedupe_key']]['id'], $row['dedupe_key']]);
+                    unset($matches[$row['dedupe_key']]['new_alias']);
+                }
+                $skipped++; continue;
+            }
             $merchantId = $row['kind'] === 'payment' ? null : resolve_merchant($db, $userId, $row['suggestion']);
             analyzer_query($db, 'INSERT INTO analyzer_transactions (user_id, account_id, import_id, merchant_id, transaction_date, description, memo, amount_cents, kind, bank_reference, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$userId, $accountId, $importId, $merchantId, $row['date'], $row['description'], $row['memo'], $row['amount'], $row['kind'], $row['reference'], $row['dedupe_key']]);

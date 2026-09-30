@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS analyzer_transactions (
     FOREIGN KEY (merchant_id) REFERENCES analyzer_merchants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Remember a CSV identity matched to a saved bank-feed transaction.
+CREATE TABLE IF NOT EXISTS analyzer_csv_feed_matches (
+    user_id BIGINT UNSIGNED NOT NULL,
+    account_id BIGINT UNSIGNED NOT NULL,
+    transaction_id BIGINT UNSIGNED NOT NULL,
+    dedupe_key CHAR(64) NOT NULL,
+    UNIQUE KEY csv_feed_identity (account_id, dedupe_key),
+    UNIQUE KEY csv_feed_transaction (transaction_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (transaction_id) REFERENCES analyzer_transactions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS analyzer_ai_jobs (
     merchant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
