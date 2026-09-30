@@ -36,4 +36,8 @@ $long = [];
 for ($i = 0; $i < 15; $i++) { $key = (new DateTimeImmutable('2024-01-01'))->modify("+$i months")->format('Y-m'); $long[$key] = $history['2026-01']; }
 check(count(spending_dashboard($long)['series']) === 12 && spending_dashboard($long)['expenses'] === 450000, 'line chart caps at 12 months while cumulative chart retains all history');
 check(signed_percent(-.00001) === '0.0%' && signed_percent(null) === '—', 'percentage labels avoid negative zero and undefined percentages');
+check($dash['average'] === 16250 && count($dash['pastMonths']) === 4, 'average includes zero-purchase months and excludes missing months');
+$currentHistory = [gmdate('Y-m', strtotime('first day of last month')) => $history['2026-01'], gmdate('Y-m') => $history['2026-03']];
+check(spending_dashboard($currentHistory)['average'] === 30000, 'average excludes the in-progress current month');
+check(substr_count(donut_slice_path(0, 1), ' A ') === 4 && !str_contains(donut_slice_path(.25, .5), 'NAN'), 'donut geometry supports one-category and partial wedges');
 echo "All spending analytics checks passed.\n";

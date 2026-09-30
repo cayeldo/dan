@@ -157,7 +157,7 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         csrf = token(empty)
         status, connect_page, connect_headers = request('/?page=connect')
         check(status == 200 and 'Three steps to automatic imports' in connect_page and 'Cardmember Service' in connect_page, 'SimpleFIN setup page renders')
-        check(connect_headers['Content-Security-Policy'] == "default-src 'none'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", 'SimpleFIN page retains strict app policy without third-party scripts')
+        check(connect_headers['Content-Security-Policy'] == "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", 'SimpleFIN page retains strict app policy without third-party scripts')
         check(request('/?page=connect', {'action': 'sfin_connect', 'csrf': 'wrong'})[0] == 403, 'SimpleFIN connection requires CSRF')
         setup = base64.b64encode(b'https://beta-bridge.simplefin.org/simplefin/claim/test-web-token').decode()
         status, connected, _ = request('/?page=connect', {'action': 'sfin_connect', 'csrf': csrf, 'setup_token': setup})
@@ -184,8 +184,14 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check('No transactions have been imported for July 2026' in report, 'monthly comparison distinguishes missing prior data from zero')
         status, overview, _ = request('/')
         check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Category shifts' in overview, 'portal renders all dashboard charts after import')
-        check('Automatic categorization is in progress.' in report and 'CURIOUS SHOP' in report, 'unknown merchant is queued without prompting for a category')
-        audit = AuditDetails(report).nodes
+        check('Automatic categorization is in progress.' in report and 'Curious Shop' in report, 'unknown merchant is queued without prompting for a category')
+        check('id="audit-heading"' not in report and 'name="statement"' not in report, 'analyzer hides category audit and keeps upload on its own page')
+        check('<details class="panel compact-disclosure" id="merchant-totals">' in report and '<details class="panel import-history compact-disclosure">' in report, 'merchant totals and recent imports start collapsed')
+        check('data-tooltip=' in report and '/charts.js' in report, 'category charts expose values through the local tooltip script')
+        status, statements, _ = request('/?page=statements')
+        check(status == 200 and 'name="statement"' in statements, 'Statements menu provides the upload form')
+        status, audit_report, _ = request('/?page=analyzer&month=2026-08&audit=all')
+        audit = AuditDetails(audit_report).nodes
         robin = next(node for key, node in audit.items() if key.startswith('merchant-') and 'RED ROBIN NO 360' in node['text'])
         restaurant = audit[robin['parent']]
         check(restaurant['id'].startswith('category-') and 'Restaurants' in restaurant['text']
@@ -194,10 +200,11 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
               and 'RED ROBIN 23' in robin['text'] and '$10.00' in robin['text'] and '$20.00' in robin['text'], 'merchant expands into individual dated charges')
         status, category_open, _ = request('/?page=analyzer&month=2026-08&category=' + restaurant['id'].split('-')[1])
         check(status == 200 and AuditDetails(category_open).nodes[restaurant['id']]['open'], 'chart category link opens the matching audit group')
+        check(len([key for key in AuditDetails(category_open).nodes if key.startswith('category-')]) == 1, 'selecting a slice reveals only that category')
         status, merchant_open, _ = request('/?page=analyzer&month=2026-08&merchant=' + robin['id'].split('-')[1])
         opened = AuditDetails(merchant_open).nodes
         check(status == 200 and opened[restaurant['id']]['open'] and opened[robin['id']]['open'], 'merchant details link opens both disclosure levels')
-        edit_id = re.search(r'id="name-(\d+)" name="merchant_name" value="Curious Shop"', report).group(1)
+        edit_id = re.search(r'id="name-(\d+)" name="merchant_name" value="Curious Shop"', audit_report).group(1)
         status, updated, _ = request('/?page=analyzer', {'csrf': csrf, 'action': 'save_merchant', 'merchant_id': edit_id, 'merchant_name': '<script>alert(1)</script>', 'category_id': 0, 'custom_category': 'My custom category', 'month': '2026-08', 'account_filter': 0})
         check(status == 200 and 'My custom category' in updated and '&lt;script&gt;alert(1)&lt;/script&gt;' in updated and '<script>alert(1)</script>' not in updated, 'custom category saves and user-entered names are escaped')
         status, duplicate_preview, _ = request('/?page=analyzer', upload, csv)
@@ -226,7 +233,7 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
             check(status == 200 and '$2,217.46' in august and 'Food Delivery' in august, 'month and card filters reconcile sample August report')
             status, september_card, _ = request('/?page=analyzer&month=2026-09&account=2')
             check(status == 200 and '+$59.99' in september_card, 'previous-month comparison honors the selected card')
-            sample_audit = AuditDetails(sample_report).nodes
+            sample_audit = AuditDetails(request('/?page=analyzer&month=2026-09&audit=all')[1]).nodes
             costco = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'COSTCO WHSE' in node['text'])
             harris = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'HARRIS TEETER' in node['text'])
             check(costco['parent'] == harris['parent'] and 'Groceries' in sample_audit[costco['parent']]['text']

@@ -2,10 +2,13 @@
 if (!defined('DAN_PORTAL')) { http_response_code(403); exit; }
 $expandedCategory = is_scalar($_GET['category'] ?? null) ? (int) $_GET['category'] : 0;
 $expandedMerchant = is_scalar($_GET['merchant'] ?? null) ? (int) $_GET['merchant'] : 0;
+$auditAll = ($_GET['audit'] ?? '') === 'all';
+$auditGroups = array_filter($report['category_groups'], fn($group) => $auditAll || $expandedCategory === $group['id'] || in_array($expandedMerchant, $group['merchant_ids'], true));
+if (!$auditGroups) { return; }
 ?>
 <section class="panel category-audit-panel" aria-labelledby="audit-heading">
-    <div class="section-heading"><div><h2 id="audit-heading">Audit your categories</h2><p class="hint">Expand a category to see its merchants, then expand a merchant to see every charge and correct its category.</p></div><span class="muted"><?= count($report['category_groups']) ?> categories</span></div>
-    <?php foreach ($report['category_groups'] as $group): ?>
+    <div class="section-heading"><div><h2 id="audit-heading">Audit your categories</h2><p class="hint">Select a merchant to review or edit.</p></div><a href="<?= escape(analyzer_url($month, $accountFilter) . '#spending-chart') ?>">Close details ×</a></div>
+    <?php foreach ($auditGroups as $group): ?>
     <details class="category-audit" id="category-<?= $group['id'] ?>" <?= $expandedCategory === $group['id'] || in_array($expandedMerchant, $group['merchant_ids'], true) ? 'open' : '' ?>>
         <summary class="audit-summary">
             <span class="audit-chevron" aria-hidden="true">›</span>
@@ -42,5 +45,5 @@ $expandedMerchant = is_scalar($_GET['merchant'] ?? null) ? (int) $_GET['merchant
         </div>
     </details>
     <?php endforeach; ?>
-    <p class="hint">Category and merchant purchases match the chart. Credits are shown separately and subtracted from net spending. Card payments are excluded.</p>
+    <p class="hint">Category changes apply across your reports.</p>
 </section>

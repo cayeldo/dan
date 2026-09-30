@@ -91,7 +91,23 @@ function spending_dashboard(array $history): array
             $series[$key] = $history[$key]['expenses'] ?? null; // A missing upload is not zero spending.
         }
     }
-    return compact('categories', 'expenses', 'refunds', 'latest', 'comparison', 'movers', 'series');
+    $pastMonths = array_filter($series, fn($value, $key) => $value !== null && $key < gmdate('Y-m'), ARRAY_FILTER_USE_BOTH);
+    $average = $pastMonths ? (int) round(array_sum($pastMonths) / count($pastMonths)) : null;
+    return compact('categories', 'expenses', 'refunds', 'latest', 'comparison', 'movers', 'series', 'average', 'pastMonths');
+}
+
+/** Filled donut wedges have precise hit areas for hover, focus, and click. */
+function donut_slice_path(float $offset, float $fraction): string
+{
+    $point = static fn(float $r, float $angle): string => sprintf('%.4F %.4F', 120 + $r * cos($angle), 120 + $r * sin($angle));
+    $start = $offset * 2 * M_PI - M_PI / 2;
+    $end = $start + $fraction * 2 * M_PI;
+    if ($fraction >= .99999999) {
+        return 'M 120 18 A 102 102 0 1 1 120 222 A 102 102 0 1 1 120 18 L 120 42 A 78 78 0 1 0 120 198 A 78 78 0 1 0 120 42 Z';
+    }
+    $large = $fraction > .5 ? 1 : 0;
+    return 'M ' . $point(102, $start) . ' A 102 102 0 ' . $large . ' 1 ' . $point(102, $end)
+        . ' L ' . $point(78, $end) . ' A 78 78 0 ' . $large . ' 0 ' . $point(78, $start) . ' Z';
 }
 
 function signed_money(int $cents): string { return ($cents > 0 ? '+' : '') . money($cents); }

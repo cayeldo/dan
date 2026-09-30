@@ -8,7 +8,7 @@ require __DIR__ . '/admin.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'connect', 'admin'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'statements', 'connect', 'admin'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -41,7 +41,7 @@ if ($page === 'admin') { require __DIR__ . '/admin-controller.php'; }
 if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
-    $db = $page === 'analyzer' ? database() : null;
+    $db = in_array($page, ['analyzer', 'statements'], true) ? database() : null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin'], true)) {
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ANALYZER_MAX_BYTES + 65536) { throw new InvalidArgumentException('The upload is too large. Choose a CSV smaller than 2 MB.'); }
         if (!hash_equals($_SESSION['csrf'], input('csrf'))) {
@@ -51,7 +51,7 @@ try {
         if ($action === 'logout') {
             $_SESSION = []; session_regenerate_id(true); header('Location: /', true, 303); exit;
         }
-        if ($page !== 'analyzer') { throw new InvalidArgumentException('Open the analyzer to manage your statements.'); }
+        if (!in_array($page, ['analyzer', 'statements'], true)) { throw new InvalidArgumentException('Open Statements to manage your uploads.'); }
         if ($action === 'upload') {
             $file = $_FILES['statement'] ?? null;
             if (!is_array($file) || !is_int($file['error'] ?? null) || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
@@ -77,7 +77,7 @@ try {
                 'account_id' => $accountId, 'account_label' => $accountLabel, 'rows' => $rows];
             preview_import($db, $userId, $pending); // Detect conflicting references before offering Save.
             $_SESSION['pending_import'] = $pending;
-            redirect_analyzer();
+            header('Location: /?page=statements', true, 303); exit;
         } elseif ($action === 'confirm_import') {
             if (!$pending || !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview expired or was replaced. Upload your CSV again.'); }
             $result = save_import($db, $userId, $pending);
@@ -89,7 +89,7 @@ try {
             redirect_analyzer($result['month']);
         } elseif ($action === 'discard_import') {
             if ($pending && !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview was replaced. Reload before discarding it.'); }
-            unset($_SESSION['pending_import']); redirect_analyzer();
+            unset($_SESSION['pending_import']); header('Location: /?page=statements', true, 303); exit;
         } elseif ($action === 'save_merchant') {
             update_merchant($db, $userId, (int) input('merchant_id'), input('merchant_name'), (int) input('category_id'), input('custom_category'));
             $_SESSION['notice'] = 'Merchant and category saved. This applies to your past reports and future matching transactions.';
@@ -103,21 +103,23 @@ try {
     http_response_code(503); $error = 'The analyzer is temporarily unavailable. Please try again shortly.';
 }
 
-if ($page === 'analyzer') {
+if (in_array($page, ['analyzer', 'statements'], true)) {
     try {
         $db ??= database();
         $accounts = user_accounts($db, $userId);
         if ($accountFilter > 0 && !in_array($accountFilter, array_map('intval', array_column($accounts, 'id')), true)) {
             $accountFilter = 0;
         }
-        $months = report_months($db, $userId, $accountFilter);
-        $month = preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $requestedMonth) ? $requestedMonth : ($months[0] ?? gmdate('Y-m'));
-        $report = monthly_report($db, $userId, $month, $accountFilter);
-        $history = spending_history($db, $userId, $accountFilter);
-        $comparison = spending_comparison($history, $month);
-        $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
+        if ($page === 'analyzer') {
+            $months = report_months($db, $userId, $accountFilter);
+            $month = preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $requestedMonth) ? $requestedMonth : ($months[0] ?? gmdate('Y-m'));
+            $report = monthly_report($db, $userId, $month, $accountFilter);
+            $history = spending_history($db, $userId, $accountFilter);
+            $comparison = spending_comparison($history, $month);
+            $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
+        }
         $imports = analyzer_query($db, 'SELECT i.*, a.label AS account FROM analyzer_imports i JOIN analyzer_accounts a ON a.id = i.account_id WHERE i.user_id = ? ORDER BY i.id DESC LIMIT 5', [$userId])->fetchAll();
-        if ($pending) { $preview = preview_import($db, $userId, $pending); }
+        if ($pending && $page === 'statements') { $preview = preview_import($db, $userId, $pending); }
     } catch (InvalidArgumentException $exception) { $error = $exception->getMessage(); }
     catch (Throwable $exception) {
         error_log('Dan analyzer report failed: ' . get_class($exception));
@@ -139,14 +141,15 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'admin' ? 'User administration' : ($page === 'connect' ? 'Connect your card' : 'Credit card analyzer')) ?> · Dan</title>
+    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'admin' ? 'User administration' : ($page === 'connect' ? 'Connect your card' : ($page === 'statements' ? 'Statements' : 'Credit card analyzer'))) ?> · Dan</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/portal.css">
+    <script src="/charts.js" defer></script>
 </head>
 <body class="workspace">
 <header class="topbar">
     <a class="wordmark" href="/" aria-label="Dan home">dan<span>.</span></a>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>
