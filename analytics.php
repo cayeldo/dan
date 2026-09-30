@@ -62,11 +62,12 @@ function spending_comparison(array $history, string $month): array
 function spending_dashboard(array $history): array
 {
     $categories = []; $expenses = 0; $refunds = 0;
-    foreach ($history as $period) {
+    foreach ($history as $month => $period) {
         $expenses += $period['expenses']; $refunds += $period['refunds'];
         foreach ($period['categories'] as $id => $category) {
             $categories[$id] ??= ['id' => $id, 'name' => $category['name'], 'amount' => 0];
             $categories[$id]['amount'] += $category['amount'];
+            $categories[$id]['latest_month'] = max($categories[$id]['latest_month'] ?? '', $month);
         }
     }
     uasort($categories, fn($a, $b) => ($b['amount'] <=> $a['amount']) ?: strcasecmp($a['name'], $b['name']));
