@@ -86,7 +86,7 @@ function database(): PDO {
     return $db;
 }
 ''')
-    schema = (ROOT / 'database/analyzer.sql').read_text()
+    schema = (ROOT / 'database/analyzer.sql').read_text() + (ROOT / 'database/admin.sql').read_text()
     schema = schema.replace('BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY', 'INTEGER PRIMARY KEY AUTOINCREMENT')
     schema = re.sub(r'UNIQUE KEY \w+ \(', 'UNIQUE (', schema)
     schema = re.sub(r'^\s*KEY \w+ \([^\n]+\),\n', '', schema, flags=re.M)
@@ -101,6 +101,7 @@ $db->exec(file_get_contents(__DIR__ . '/schema.sql'));
 $q = $db->prepare('INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)');
 $q->execute([1, 'first_test_user', password_hash('test-only-passphrase', PASSWORD_BCRYPT)]);
 $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWORD_BCRYPT)]);
+$db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
 ''')
     subprocess.run(['php', str(folder / 'fixture.php')], check=True, stdout=subprocess.DEVNULL)
     with contextlib.closing(socket.socket()) as sock:
@@ -230,6 +231,36 @@ $q->execute([2, 'second_test_user', password_hash('test-only-passphrase', PASSWO
             harris = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'HARRIS TEETER' in node['text'])
             check(costco['parent'] == harris['parent'] and 'Groceries' in sample_audit[costco['parent']]['text']
                   and 'COSTCO GAS' not in sample_audit[costco['parent']]['text'], 'sample Groceries audit groups Costco and Harris Teeter separately from fuel')
+        status, admin_page, _ = request('/?page=admin')
+        check(status == 200 and 'Add user &amp; generate code' in admin_page and '>Admin</a>' in portal, 'administrator sees user management and navigation')
+        check(request('/?page=admin', {'csrf': 'wrong', 'action': 'create_user', 'username': 'blocked_user'})[0] == 403, 'CSRF blocks admin creation')
+        status, issued, issued_headers = request('/?page=admin', {'csrf': csrf, 'action': 'create_user', 'username': 'Emilia'})
+        code = re.search(r'id="issued-code" value="([a-f0-9]{64})"', issued).group(1)
+        check(status == 200 and 'Setup code for emilia' in issued and issued_headers['Cache-Control'] == 'no-store', 'new account gets a private one-time setup code automatically')
+        check(code not in request('/?page=admin')[1], 'setup code disappears after its first display')
+        status, duplicate, _ = request('/?page=admin', {'csrf': csrf, 'action': 'create_user', 'username': 'EMILIA'})
+        check('already exists' in duplicate and 'id="issued-code"' not in duplicate, 'duplicate username cannot replace an existing account')
+        status, replacement, _ = request('/?page=admin', {'csrf': csrf, 'action': 'generate_setup_code', 'username': 'emilia'})
+        replacement_code = re.search(r'id="issued-code" value="([a-f0-9]{64})"', replacement).group(1)
+        check(replacement_code != code, 'admin can replace an unused setup code')
+        status, active_user, _ = request('/?page=admin', {'csrf': csrf, 'action': 'generate_setup_code', 'username': 'first_test_user'})
+        check('only for users who have not created a password' in active_user and 'id="issued-code"' not in active_user, 'active passwords cannot be replaced by setup generation')
+        fresh = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        status, setup_page, _ = request('/?mode=setup', browser=fresh)
+        check('Add user &amp; generate code' not in request('/?page=admin', browser=fresh)[1], 'signed-out visitors cannot access user management')
+        setup_fields = {'csrf': token(setup_page), 'username': 'emilia', 'setup_code': code, 'password': 'new-emilia-test-passphrase', 'confirmation': 'new-emilia-test-passphrase'}
+        status, obsolete, _ = request('/?mode=setup', setup_fields, browser=fresh)
+        check('Welcome back, Emilia.' not in obsolete, 'replaced code cannot claim the new account')
+        setup_fields['setup_code'] = replacement_code
+        status, emilia_home, _ = request('/?mode=setup', setup_fields, browser=fresh)
+        check(status == 200 and 'Welcome back, Emilia.' in emilia_home and '>Admin</a>' not in emilia_home, 'new user creates a password and enters her own portal without admin access')
+        check(request('/?page=admin', browser=fresh)[0] == 403, 'member cannot read admin user list')
+        status, denied, _ = request('/?page=admin', {'csrf': token(emilia_home), 'action': 'generate_setup_code', 'username': 'second_test_user', 'is_admin': '1'}, browser=fresh)
+        check(status == 403 and 'id="issued-code"' not in denied, 'member cannot generate codes or self-assign admin via form fields')
+        if os.environ.get('DAN_PREVIEW_DIR'):
+            destination = Path(os.environ['DAN_PREVIEW_DIR'])
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / 'admin.html').write_text(issued)
         status, login, _ = request('/', {'csrf': csrf, 'action': 'logout'})
         check('autocomplete="current-password"' in login, 'sign-out returns to login')
         status, protected, _ = request('/?page=analyzer')

@@ -241,3 +241,9 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .preview-details { margin-top: 14px; padding: 16px; border: 1px solid var(--border, #dfe5f0); border-radius: 12px; }
 .preview-details summary { cursor: pointer; font-weight: 650; }
 .preview-details[open] summary { margin-bottom: 16px; }
+
+.admin-create { max-width: 520px; }
+.admin-create button { margin-top: 16px; }
+.admin-code { border-color: #91a6df; }
+.admin-code input { font-family: ui-monospace, monospace; font-size: .9rem; }
+.admin-code p { line-height: 1.6; max-width: 820px; }
