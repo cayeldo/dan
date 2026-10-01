@@ -386,8 +386,8 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .budget-actions { display: flex; gap: 20px; align-items: center; margin-top: 24px; }
 @media (max-width: 700px) {
     .budget-column-head, .budget-row { grid-template-columns: minmax(0, 1fr) 145px; gap: 14px; }
-    .budget-category { gap: 8px; }
-    .budget-category label { font-size: .85rem; }
+    .budget-category { gap: 6px; flex-wrap: wrap; }
+    .budget-category label { font-size: .85rem; flex-basis: 100%; }
     .budget-total { padding: 18px; font-size: .85rem; }
     .budget-total output { font-size: 1.2rem; }
     .budget-actions { align-items: flex-start; flex-direction: column; gap: 10px; }
