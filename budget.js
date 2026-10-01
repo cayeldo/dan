@@ -44,6 +44,7 @@
     const form = document.querySelector('[data-budget-form]');
     if (!form) return;
     const output = form.querySelector('[data-budget-total]');
+    const remaining = form.querySelector('[data-budget-remaining]');
     const fields = [...form.querySelectorAll('[data-budget-target]')];
     const update = () => {
         let cents = 0;
@@ -55,7 +56,8 @@
             if (!valid || value > 9999999.99) missing++;
             else cents += Math.round(value * 100);
         });
-        output.textContent = missing ? `Enter ${missing} target${missing === 1 ? '' : 's'}` : new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'}).format(cents / 100);
+        output.textContent = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'}).format(cents / 100);
+        remaining.textContent = missing ? `${missing} target${missing === 1 ? '' : 's'} left to enter.` : 'All targets entered.';
     };
     form.addEventListener('input', update);
     update();

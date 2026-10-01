@@ -1,16 +1,18 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
 <section class="page-heading"><div><div class="eyebrow">A PLAN FOR YOUR MONTH</div><h1>Monthly budget</h1><p class="page-intro">Set your targets. Make room for what matters.</p></div></section>
 <form class="report-filter budget-month-filter" method="get" action="/"><input type="hidden" name="page" value="budget"><div><label for="budget-month-picker">Budget month</label><input type="month" name="month" id="budget-month-picker" value="<?= escape($budgetMonth) ?>" required></div><button type="submit" class="secondary">View budget</button></form>
-<?php if ($budget): $budgetHistory = $budget['history']; ?>
+<?php if ($budget): $budgetHistory = $budget['history']; $budgetEnteredTotal = 0; $budgetMissing = 0; ?>
 <section class="panel budget-panel" aria-labelledby="budget-heading">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($budget['month'])) ?></div><h2 id="budget-heading">Your monthly targets</h2></div><span class="pill"><?= $budget['revision'] ? 'Saved budget' : 'New budget' ?></span></div>
-    <p class="hint">Hover or tap ⓘ for historical averages. Enter your own amount in every field; 0 is welcome.</p>
+    <p class="hint">Hover or tap ⓘ for averages and ? for examples. Enter your own amount in every field; 0 is welcome.</p>
     <form method="post" action="/?page=budget" class="budget-form" data-budget-form>
         <?php csrf_field(); ?><input type="hidden" name="action" value="save_budget"><input type="hidden" name="budget_month" value="<?= escape($budget['month']) ?>"><input type="hidden" name="budget_version" value="<?= escape(budget_form_version($budget)) ?>">
         <div class="budget-column-head"><span>Category</span><span>Monthly target · USD</span></div>
         <?php foreach ($budget['groups'] as $key => $group):
             $amount = $budgetValues !== null ? ($budgetValues[$key] ?? '') : (isset($budget['targets'][$key]) ? number_format($budget['targets'][$key] / 100, 2, '.', '') : '');
             $amount = is_string($amount) ? $amount : '';
+            try { $budgetEnteredTotal += budget_target_cents($amount); }
+            catch (InvalidArgumentException $e) { $budgetMissing++; }
             $average = $budget['averages'][$key]; ?>
         <div class="budget-row">
             <div class="budget-category"><label for="target-<?= escape($key) ?>"><?= escape($group['name']) ?></label>
@@ -21,11 +23,19 @@
                         <?php if ($key === 'misc'): ?><span>Combined average for categories not itemized above.<?= $budget['misc_categories'] ? ' Includes ' . escape(implode(', ', $budget['misc_categories'])) . '.' : '' ?></span><?php endif; ?>
                     </span>
                 </span>
+                <span class="budget-help"><button class="text-button budget-info" type="button" aria-label="<?= escape('About ' . $group['name']) ?>" aria-expanded="false" aria-controls="budget-examples-<?= escape($key) ?>" data-budget-info><span aria-hidden="true">?</span></button>
+                    <span class="budget-popover" id="budget-examples-<?= escape($key) ?>" role="note" hidden>
+                        <strong><?= escape($group['name']) ?></strong>
+                        <span><?= escape(budget_category_explanation($group['name'])) ?></span>
+                        <?php if ($budget['examples'][$key]): ?><span>Examples from your past purchases:</span><?php foreach ($budget['examples'][$key] as $example): ?><span><?= escape($example['name']) ?><?= $key === 'misc' ? ' · ' . escape($example['category']) : '' ?></span><?php endforeach; ?><?php else: ?><span>No past purchases to show yet.</span><?php endif; ?>
+                    </span>
+                </span>
             </div>
             <div class="budget-amount"><span aria-hidden="true">$</span><input type="text" inputmode="decimal" name="targets[<?= escape($key) ?>]" id="target-<?= escape($key) ?>" value="<?= escape($amount) ?>" placeholder="Enter amount" maxlength="16" autocomplete="off" required data-budget-target></div>
         </div>
         <?php endforeach; ?>
-        <div class="budget-total"><span>Total monthly target</span><output data-budget-total aria-live="polite"><?= $budget['revision'] && $budgetValues === null ? money(array_sum($budget['targets'])) : 'Enter your targets' ?></output></div>
+        <div class="budget-total"><span>Total monthly budget</span><output data-budget-total aria-live="polite"><?= money($budgetEnteredTotal) ?></output></div>
+        <p class="hint" data-budget-remaining><?= $budgetMissing ? $budgetMissing . ' target' . ($budgetMissing === 1 ? '' : 's') . ' left to enter.' : 'All targets entered.' ?></p>
         <div class="budget-actions"><button type="submit">Save monthly budget</button><?php if ($budget['updated_at']): ?><span class="hint">Last saved <?= escape(substr($budget['updated_at'], 0, 10)) ?></span><?php endif; ?></div>
     </form>
 </section>

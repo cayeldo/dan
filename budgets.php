@@ -52,8 +52,42 @@ function budget_plan(PDO $db, int $user, string $month): array
         $sum = $key === 'misc' ? $miscTotal : ($history['totals'][$group['category_id']] ?? 0);
         $averages[$key] = $history['count'] ? (int) round($sum / $history['count']) : null;
     }
-    return ['month' => $month, 'groups' => $groups, 'targets' => $targets, 'averages' => $averages, 'history' => $history,
+    $examples = array_fill_keys(array_keys($groups), []);
+    $merchants = analyzer_query($db, "SELECT m.name, m.category_id, c.name AS category, SUM(ABS(t.amount_cents)) AS spending
+        FROM analyzer_transactions t JOIN analyzer_merchants m ON m.id = t.merchant_id AND m.user_id = t.user_id
+        JOIN analyzer_categories c ON c.id = m.category_id AND c.user_id = t.user_id
+        WHERE t.user_id = ? AND t.kind = 'expense' AND t.transaction_date < ?
+        GROUP BY m.id, m.name, m.category_id, c.name ORDER BY spending DESC, m.name ASC",
+        [$user, min($month, gmdate('Y-m')) . '-01'])->fetchAll();
+    foreach ($merchants as $merchant) {
+        $key = in_array((int) $merchant['category_id'], $individualIds, true) ? 'category_' . $merchant['category_id'] : 'misc';
+        if (count($examples[$key]) < 3) { $examples[$key][] = ['name' => $merchant['name'], 'category' => $merchant['category']]; }
+    }
+    return ['month' => $month, 'groups' => $groups, 'targets' => $targets, 'averages' => $averages, 'history' => $history, 'examples' => $examples,
         'misc_categories' => array_column($miscCategories, 'name'), 'revision' => (int) ($saved['revision'] ?? 0), 'updated_at' => $saved['updated_at'] ?? null];
+}
+
+function budget_category_explanation(string $name): string
+{
+    return [
+        'Groceries' => 'Food and household essentials from grocery stores.',
+        'Restaurants' => 'Meals, drinks, and takeout bought directly from restaurants or cafés.',
+        'Food Delivery' => 'Meals ordered through delivery services.',
+        'Transportation' => 'Getting around, such as rideshares, public transit, parking, and tolls.',
+        'Fuel' => 'Gas and other vehicle fuel purchases.',
+        'Utilities' => 'Household services such as electricity, water, phone, and internet.',
+        'Shopping' => 'Retail purchases such as clothing, electronics, and household goods.',
+        'Home Improvement' => 'Supplies and services for home repairs and improvements.',
+        'Health & Pharmacy' => 'Medical care, pharmacy purchases, and health supplies.',
+        'Entertainment' => 'Activities and amusements such as movies, games, and events.',
+        'Subscriptions' => 'Recurring memberships and digital services.',
+        'Alcohol' => 'Purchases categorized as beer, wine, or spirits.',
+        'Government & Services' => 'Government charges and other service purchases.',
+        'Travel' => 'Trip expenses such as flights, hotels, and rental cars.',
+        'Fees & Interest' => 'Account fees and interest charges.',
+        'Uncategorized' => 'Purchases still waiting for a category. Review them in the analyzer.',
+        'Misc' => 'Smaller spending categories combined into one target. Saved budgets keep their original grouping.',
+    ][$name] ?? 'Purchases assigned to this category in your analyzer.';
 }
 
 function budget_form_version(array $plan): string

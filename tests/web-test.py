@@ -231,6 +231,8 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         status, budget_page, _ = request('/?page=budget&month=2026-09')
         check(status == 200 and 'Monthly budget' in budget_page and 'Historical average for Misc' in budget_page, 'Budget menu renders historical suggestion controls')
         check('name="targets[misc]"' in budget_page and 'value="" placeholder="Enter amount"' in budget_page, 'new targets stay blank despite available historical averages')
+        check('About Misc' in budget_page and 'Examples from your past purchases:' in budget_page, 'category help includes examples from imported purchases')
+        check('Total monthly budget' in budget_page and 'data-budget-total aria-live="polite">$0.00' in budget_page, 'blank budget shows a dollar total before targets are entered')
         budget_fields = {'csrf': csrf, 'action': 'save_budget', 'budget_month': '2026-09', 'budget_version': token(budget_page, 'budget_version'), 'targets[misc]': '125.50'}
         check(request('/?page=budget', dict(budget_fields, csrf='wrong'))[0] == 403, 'budget saves require CSRF')
         check('Enter a monthly amount' in request('/?page=budget', dict(budget_fields, **{'targets[misc]': ''}))[1], 'empty budget targets are rejected by the server')
