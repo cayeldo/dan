@@ -8,12 +8,14 @@ mkdir($storage, 0700); putenv('DAN_SIMPLEFIN_STORAGE=' . $storage);
 $access = 'https://test-user:test-private-password@beta-bridge.simplefin.org/simplefin';
 $claim = base64_encode('https://beta-bridge.simplefin.org/simplefin/claim/test-token');
 $today = gmdate('Y-m-d'); $yesterday = gmdate('Y-m-d', time() - 86400);
+// Keep this current-month fixture in the same report during UTC month rollover.
+$posted = max(strtotime(gmdate('Y-m-01') . ' UTC'), time() - 3600);
 $account = ['id' => 'card-1', 'conn_id' => 'bank-1', 'name' => 'Elan test card', 'currency' => 'USD', 'transactions' => [
-    ['id' => '1', 'posted' => time() - 3600, 'amount' => '-19.25', 'description' => 'COSTCO WHSE #0334'],
-    ['id' => '2', 'posted' => time() - 3600, 'amount' => '-19.25', 'description' => 'COSTCO WHSE #0334'],
+    ['id' => '1', 'posted' => $posted, 'amount' => '-19.25', 'description' => 'COSTCO WHSE #0334'],
+    ['id' => '2', 'posted' => $posted, 'amount' => '-19.25', 'description' => 'COSTCO WHSE #0334'],
     ['id' => '3', 'posted' => 0, 'amount' => '-9.50', 'description' => 'UBER *EATS', 'pending' => true],
-    ['id' => '4', 'posted' => time() - 3600, 'amount' => '100.00', 'description' => 'AUTOPAY PAYMENT'],
-    ['id' => '5', 'posted' => time() - 3600, 'amount' => '2.00', 'description' => 'COSTCO WHSE #0334']
+    ['id' => '4', 'posted' => $posted, 'amount' => '100.00', 'description' => 'AUTOPAY PAYMENT'],
+    ['id' => '5', 'posted' => $posted, 'amount' => '2.00', 'description' => 'COSTCO WHSE #0334']
 ]];
 try {
     foreach (['http://beta-bridge.simplefin.org/simplefin/claim/test', 'https://localhost/simplefin/claim/test', 'https://beta-bridge.simplefin.org.evil.test/simplefin/claim/test', 'https://beta-bridge.simplefin.org:443/simplefin/claim/test', 'https://beta-bridge.simplefin.org/simplefin/claim/test?redirect=evil', 'https://user:pw@beta-bridge.simplefin.org/simplefin/claim/test'] as $bad) {
@@ -38,7 +40,7 @@ try {
     $merchant = $report['merchants'][array_key_first($report['merchants'])];
     update_merchant($db, 1, $merchant['id'], $merchant['name'], 0, 'My groceries');
     $account['transactions'][0]['amount'] = '-21.25';
-    $account['transactions'][2]['posted'] = time() - 3600; $account['transactions'][2]['pending'] = false;
+    $account['transactions'][2]['posted'] = $posted; $account['transactions'][2]['pending'] = false;
     $counts = simplefin_import($db, 1, $link, $account);
     check($counts['updated'] === 1 && $counts['added'] === 1, 'posted correction updates existing transaction and pending-to-posted transition imports once');
     check(monthly_report($db, 1, gmdate('Y-m'), $card)['categories']['My groceries'] === 4050, 'source correction preserves user category choices');

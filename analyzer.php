@@ -31,6 +31,8 @@ function classify_merchant(string $description, string $mcc = ''): array
 {
     $text = strtoupper(preg_replace('/\s+/', ' ', trim($description)) ?? $description);
     $rules = [
+        // Ticket numbers vary per purchase; this known descriptor identifies the airline.
+        ['~^AMERICAN(?:\s+AIRLINES\b|\s+001\d{10}\s+FORT\s+WORTH\b)~', 'American Airlines', 'Travel'],
         ['~\bUBER\s*\*?\s*EATS\b~', 'Uber Eats', 'Food Delivery'],
         ['~\bUBER\s*\*?\s*TRIP\b|\bLYFT\b~', str_contains($text, 'LYFT') ? 'Lyft' : 'Uber Trip', 'Transportation'],
         ['~\bDOORDASH\b|^DD\s*\*~', 'DoorDash', 'Food Delivery'],
@@ -256,6 +258,11 @@ function csv_feed_signature(string $date, int $amount, string $kind, string $des
 {
     $merchant = classify_merchant($description);
     $name = $kind !== 'payment' && !$merchant['needs_review'] ? $merchant['name'] : $description;
+    // Merchant grouping must not erase the identity of separate airline tickets.
+    if ($kind !== 'payment' && $merchant['name'] === 'American Airlines'
+        && preg_match('/\b(001\d{10})\b/', $description, $ticket)) {
+        $name .= ' ticket ' . $ticket[1];
+    }
     return hash('sha256', json_encode([$date, $amount, $kind, merchant_match_key($name)], JSON_THROW_ON_ERROR));
 }
 
