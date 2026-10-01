@@ -5,11 +5,12 @@ define('DAN_PORTAL', true);
 require __DIR__ . '/analyzer.php';
 require __DIR__ . '/analytics.php';
 require __DIR__ . '/monthly-reviews.php';
+require __DIR__ . '/budgets.php';
 require __DIR__ . '/admin.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'statements', 'connect', 'admin'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'budget', 'statements', 'connect', 'admin'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -38,12 +39,13 @@ function redirect_analyzer(string $month = '', int $account = 0): never
     header('Location: ' . analyzer_url($month, $account), true, 303); exit;
 }
 
+if ($page === 'budget') { require __DIR__ . '/budget-controller.php'; }
 if ($page === 'admin') { require __DIR__ . '/admin-controller.php'; }
 if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
     $db = in_array($page, ['analyzer', 'statements'], true) ? database() : null;
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin'], true)) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin', 'budget'], true)) {
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ANALYZER_MAX_BYTES + 65536) { throw new InvalidArgumentException('The upload is too large. Choose a CSV smaller than 2 MB.'); }
         if (!hash_equals($_SESSION['csrf'], input('csrf'))) {
             http_response_code(403); throw new InvalidArgumentException('Your form expired. Please try again.');
@@ -171,15 +173,16 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $page === 'home' ? escape($displayName) . '’s portal' : ($page === 'admin' ? 'User administration' : ($page === 'connect' ? 'Connect your card' : ($page === 'statements' ? 'Statements' : 'Credit card analyzer'))) ?> · Dan</title>
+    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · Dan</title>
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
     <link rel="stylesheet" href="/portal.css?v=<?= substr(hash_file('sha256', __DIR__ . '/portal.css'), 0, 16) ?>">
+    <?php if ($page === 'budget'): ?><script src="/budget.js?v=<?= substr(hash_file('sha256', __DIR__ . '/budget.js'), 0, 16) ?>" defer></script><?php endif; ?>
     <script src="/charts.js?v=<?= substr(hash_file('sha256', __DIR__ . '/charts.js'), 0, 16) ?>" defer></script>
 </head>
 <body class="workspace">
 <header class="topbar">
     <a class="wordmark" href="/" aria-label="Dan home">dan<span>.</span></a>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=budget" <?= $page === 'budget' ? 'aria-current="page"' : '' ?>>Budget</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>

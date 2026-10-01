@@ -1,0 +1,44 @@
+<?php
+declare(strict_types=1);
+require __DIR__ . '/analyzer-test.php';
+require dirname(__DIR__) . '/analytics.php';
+require dirname(__DIR__) . '/monthly-reviews.php';
+require dirname(__DIR__) . '/budgets.php';
+$db->exec("INSERT INTO users (id, username) VALUES (20, 'budget_test'), (21, 'budget_other')");
+save_import($db, 20, pending_csv("Date,Name,Amount\n1/5/25,COSTCO,-100\n2/5/25,COSTCO,-20\n1/6/25,RED ROBIN,-100\n1/7/25,UBER *EATS,-30\n2/7/25,UBER *EATS,-10\n2/8/25,COSTCO,25\n2/9/25,PAYMENT THANK YOU,200\n", 0, 'Budget card'));
+$card = (int) user_accounts($db, 20)[0]['id'];
+$plan = budget_plan($db, 20, '2025-03');
+check(array_column($plan['groups'], 'name') === ['Groceries', 'Misc'], 'only categories strictly above a $50 monthly average are itemized');
+$key = array_key_first($plan['groups']);
+check($plan['averages'][$key] === 6000 && $plan['averages']['misc'] === 7000, 'averages include zero-category months, combine Misc, and exclude refunds and payments');
+check($plan['targets'] === [] && $plan['revision'] === 0, 'historical suggestions never become automatic target values');
+check(in_array('Restaurants', $plan['misc_categories']) && in_array('Food Delivery', $plan['misc_categories']), 'exactly $50 and smaller categories belong to Misc');
+rejects(fn() => save_budget($db, 20, '2025-03', [$key => '', 'misc' => '100'], budget_form_version($plan)), 'blank targets cannot be saved');
+rejects(fn() => save_budget($db, 20, '2025-03', [$key => '100'], budget_form_version($plan)), 'Misc is required too');
+rejects(fn() => save_budget($db, 20, '2025-03', [$key => '100', 'misc' => '50', 'category_999' => '5'], budget_form_version($plan)), 'client cannot inject category membership');
+foreach (['-1', '1.234', '1e3', 'NaN', '12,34', '10000000'] as $bad) {
+    rejects(fn() => budget_target_cents($bad), 'invalid target rejected: ' . $bad);
+}
+check(budget_target_cents('1,234.56') === 123456 && budget_target_cents('0') === 0 && budget_target_cents('0.29') === 29, 'currency inputs are stored exactly in integer cents');
+save_budget($db, 20, '2025-03', [$key => '55.25', 'misc' => '0'], budget_form_version($plan));
+$saved = budget_plan($db, 20, '2025-03');
+check($saved['targets'] === [$key => 5525, 'misc' => 0] && $saved['revision'] === 1, 'explicit amounts including zero persist per month');
+check(budget_plan($db, 20, '2025-04')['targets'] === [], 'a new month requires its own user-entered targets');
+check(budget_plan($db, 21, '2025-03')['targets'] === [], 'another user cannot read the saved budget');
+rejects(fn() => save_budget($db, 21, '2025-03', [$key => '1', 'misc' => '2'], budget_form_version($plan)), 'a foreign user cannot overwrite a budget or reuse its groups');
+rejects(fn() => save_budget($db, 20, '2025-03', [$key => '1', 'misc' => '2'], budget_form_version($plan)), 'a stale browser tab cannot overwrite a newer saved version');
+save_budget($db, 20, '2025-03', [$key => '70', 'misc' => '80'], budget_form_version($saved));
+check(budget_plan($db, 20, '2025-03')['targets'][$key] === 7000, 'owner can explicitly revise the selected month');
+save_import($db, 20, pending_csv("Date,Name,Amount\n2/20/25,RED ROBIN,-500\n", $card));
+check(budget_plan($db, 20, '2025-03')['groups'] === $saved['groups'], 'saved category grouping stays fixed as history changes');
+check(in_array('Restaurants', array_column(budget_plan($db, 20, '2025-04')['groups'], 'name')), 'a new budget uses updated historical category averages');
+$before = budget_plan($db, 20, gmdate('Y-m', strtotime('first day of next month')));
+save_import($db, 20, pending_csv('Date,Name,Amount' . "\n" . gmdate('m/d/Y') . ",COSTCO,-9999\n", $card));
+check(budget_plan($db, 20, gmdate('Y-m', strtotime('first day of next month')))['averages'] === $before['averages'], 'the unfinished current month is excluded from suggestions');
+confirm_complete_months($db, 20, '2025-03', '2025-03');
+check(budget_history($db, 20, '2025-04')['count'] === 3, 'confirmed empty months count while missing months do not');
+check(budget_history($db, 20, '2025-02')['count'] === 1, 'past budgets do not use later spending');
+$empty = budget_plan($db, 21, '2025-03');
+check($empty['averages']['misc'] === null && $empty['targets'] === [], 'no-history budgets do not invent averages or targets');
+rejects(fn() => budget_plan($db, 20, '2025-13'), 'invalid budget months are rejected');
+echo "All budget checks passed.\n";

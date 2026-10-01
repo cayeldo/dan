@@ -132,3 +132,14 @@ Only month/category aggregates are sent through the existing Responses API confi
 A transaction fingerprint invalidates completeness when financial records change, hiding the review until the user confirms the corrected month again. The original saved review is then shown with a changed-data notice; it is not silently regenerated. Category edits similarly flag the saved snapshot as outdated. Reviews cover all imported cards; multi-card filters do not show a misleading all-card review. The overview links to the newest available saved review.
 
 Migration is additive in `database/analyzer.sql`. Verify with `php tests/monthly-reviews-test.php` and `python3 tests/web-test.py`. Tests use stubbed model responses and disposable data, with no paid API calls.
+
+
+## Monthly budgets
+
+**Budget** is a separate menu item. Every calendar month has an independent saved plan in `analyzer_budgets`; targets are integer cents and must be explicitly entered (zero is valid). Historical averages are suggestions only, shown in hover, keyboard-focus, or tap/click information bubbles. No OpenAI calls are involved and no targets are filled from suggestions.
+
+For a new plan, categories with an unrounded average monthly purchase total strictly greater than $50 get separate fields. Exactly $50 and lower categories share **Misc**, whose suggestion is the combined monthly average. The baseline uses all earlier imported months before the chosen budget month, excludes the ongoing current month, includes category-zero months and explicitly confirmed empty months, and excludes unobserved gaps. Hints show the number and span of months; imported periods may be partial. Refunds and card payments do not lower the purchase baseline.
+
+A saved plan keeps its category IDs/names for that month. Misc means all categories outside the explicit items, including later-created categories, so subsequent imports cannot silently rearrange targets. New monthly plans use the latest history. Database user locks, CSRF, server-derived membership, and an optimistic revision fingerprint prevent cross-user writes and stale-tab overwrites. Targets are stored for later success measurements; this feature does not regenerate saved AI reviews or introduce scoring.
+
+Verify with `php tests/budgets-test.php` and `python3 tests/web-test.py` (disposable data only).

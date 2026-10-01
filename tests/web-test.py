@@ -228,9 +228,23 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         check('id="monthly-review"' not in request('/?page=analyzer&month=2026-08')[1], 'reopening a month hides all AI content')
         request('/?page=statements', complete_fields)
         check('A good start' in request('/?page=analyzer&month=2026-08')[1], 'reconfirming restores the saved review without a new request')
+        status, budget_page, _ = request('/?page=budget&month=2026-09')
+        check(status == 200 and 'Monthly budget' in budget_page and 'Historical average for Misc' in budget_page, 'Budget menu renders historical suggestion controls')
+        check('name="targets[misc]"' in budget_page and 'value="" placeholder="Enter amount"' in budget_page, 'new targets stay blank despite available historical averages')
+        budget_fields = {'csrf': csrf, 'action': 'save_budget', 'budget_month': '2026-09', 'budget_version': token(budget_page, 'budget_version'), 'targets[misc]': '125.50'}
+        check(request('/?page=budget', dict(budget_fields, csrf='wrong'))[0] == 403, 'budget saves require CSRF')
+        check('Enter a monthly amount' in request('/?page=budget', dict(budget_fields, **{'targets[misc]': ''}))[1], 'empty budget targets are rejected by the server')
+        status, saved_budget, _ = request('/?page=budget', budget_fields)
+        check(status == 200 and 'Monthly budget saved.' in saved_budget and 'value="125.50"' in saved_budget and '$125.50' in saved_budget, 'budget persists the entered amount and total')
+        check('changed in another tab' in request('/?page=budget', budget_fields)[1], 'stale form cannot overwrite a saved budget')
+        check('value="125.50"' in request('/?page=budget&month=2026-09')[1], 'saved targets load without reentering them')
+        check('value="125.50"' not in request('/?page=budget&month=2026-10')[1], 'a different month does not silently inherit targets')
+
         if os.environ.get('DAN_PREVIEW_DIR'):
             destination = Path(os.environ['DAN_PREVIEW_DIR'])
             (destination / 'review.html').write_text(saved_review_page)
+            (destination / 'budget.html').write_text(budget_page)
+            (destination / 'budget-saved.html').write_text(saved_budget)
             (destination / 'review-statements.html').write_text(request('/?page=statements&reviews=1')[1])
             for script in ROOT.glob('*.js'):
                 shutil.copy(script, destination)
@@ -322,6 +336,7 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         check('A few charts. A clearer picture.' in other_overview and 'All-time purchases by category' not in other_overview, 'second user cannot see another user’s dashboard totals')
         status, other_user, _ = request('/?page=analyzer&month=2026-08&account=1')
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
+        check('value="125.50"' not in request('/?page=budget&month=2026-09')[1], 'second user cannot see the first user’s budget targets')
         status, other_connect, _ = request('/?page=connect')
         check('Test Elan card' not in other_connect and 'setup_token' in other_connect, 'second user cannot see first user’s SimpleFIN connection')
         other_csrf = token(other_connect)

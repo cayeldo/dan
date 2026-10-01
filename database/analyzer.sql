@@ -154,3 +154,16 @@ CREATE TABLE IF NOT EXISTS analyzer_month_reviews (
     PRIMARY KEY (user_id, month),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Category membership and targets are saved per month for future comparisons.
+CREATE TABLE IF NOT EXISTS analyzer_budgets (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    groups_json MEDIUMTEXT NOT NULL,
+    targets_json MEDIUMTEXT NOT NULL,
+    revision INT UNSIGNED NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
