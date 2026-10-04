@@ -96,14 +96,13 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
     <title><?= escape($title) ?> · KLE Coin</title>
     <?php require __DIR__ . "/views/brand-head.php"; ?>
     <meta property="og:title" content="KLE Coin — Plan. Spend. Save. Grow.">
-    <meta property="og:image" content="https://klecoin.com/assets/kle-coin-logo.png">
+    <meta property="og:image" content="https://klecoin.com/assets/kle-coin-logo-v2.png">
     <meta property="og:url" content="https://klecoin.com/">
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
 </head>
 <body class="auth-page">
 <header class="brand"><?php require __DIR__ . "/views/brand.php"; ?><span class="brand-label">YOUR PRIVATE MONEY SPACE</span></header>
 <main class="auth-main">
-    <div class="auth-artwork"><img src="/assets/kle-coin-logo.png" width="1536" height="1024" alt="KLE Coin. Plan, spend, save, grow."><p>Know where it goes.<br><strong>Choose where you grow.</strong></p></div>
     <section class="card" aria-labelledby="heading">
         <div class="eyebrow"><?= $signedIn ? 'ALL SET' : ($setup ? 'FIRST TIME HERE' : 'ACCOUNT ACCESS') ?></div>
         <h1 id="heading"><?= escape($title) ?></h1>

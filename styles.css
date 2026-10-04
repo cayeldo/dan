@@ -21,25 +21,17 @@ a { color: var(--brand); text-underline-offset: 3px; }
 footer { padding: 24px; color: #56657b; text-align: center; font-size: .8125rem; }
 @media (max-width: 480px) { .card { padding: 30px 24px; } .brand { padding: 22px 24px; } .brand-label { font-size: .6875rem; } main { padding-top: 16px; } }
 
-/* KLE Coin: original artwork, compact navigation mark, and accessible teal accents. */
-.brand-link { display: inline-flex; align-items: center; gap: 11px; flex-shrink: 0; text-decoration: none; color: #132d35; }
-.brand-symbol { position: relative; display: block; width: 48px; height: 48px; overflow: hidden; border-radius: 12px; background: #061724; flex-shrink: 0; }
-.brand-symbol img { position: absolute; width: 260%; height: auto; max-width: none; left: -80%; top: -15%; }
-.brand-name { font-size: 1.55rem; font-weight: 800; letter-spacing: -.045em; white-space: nowrap; }
-.brand-name > span { color: var(--brand); }
+/* Show the complete supplied logo, including its tagline. Only outer white margins
+   are outside this viewport; the coin, wordmark, and all four words remain visible. */
+.brand-link { position: relative; display: block; width: 320px; max-width: 100%; aspect-ratio: 1110 / 870; flex-shrink: 0; overflow: hidden; text-decoration: none; background: #fff; }
+.brand-logo { position: absolute; display: block; width: 138.3784%; height: auto; max-width: none; left: -18.9189%; top: -7.4713%; }
 .auth-page { background: #f3f7f5; }
-.auth-main { width: min(1160px, 100%); margin: auto; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; gap: 56px; padding: 28px 32px 56px; }
-.auth-artwork { width: 100%; border-radius: 24px; overflow: hidden; background: #03101b; box-shadow: 0 20px 60px #06172418; }
-.auth-artwork > img { display: block; width: 100%; height: auto; }
-.auth-artwork > p { margin: 0; padding: 8px 32px 32px; color: #d4eae5; text-align: center; font-size: 1.15rem; line-height: 1.6; }
-.auth-artwork strong { color: #baf58c; font-weight: 600; }
+.auth-page .brand { flex-direction: column; justify-content: center; gap: 12px; padding: 20px 24px; background: #fff; border-bottom: 1px solid #e0e6ef; }
+.auth-page .brand-label { border: 0; padding: 0; font-size: .6875rem; }
+.auth-main { width: min(508px, 100%); margin: 0 auto; padding: 32px 24px; }
 .auth-main .card { max-width: none; }
-@media (max-width: 820px) {
-    .auth-main { grid-template-columns: 1fr; max-width: 520px; gap: 24px; padding: 12px 24px 36px; }
-    .auth-artwork > p { display: none; }
-    .auth-artwork { max-height: 270px; display: grid; place-items: center; }
-    .auth-artwork > img { width: min(100%, 405px); }
-    .brand { justify-content: center; }
-    .brand-label { display: none; }
+@media (max-width: 700px) {
+    .brand-link { width: 300px; }
+    .auth-page .brand { padding: 12px 24px 18px; }
+    .auth-main { padding-top: 24px; }
 }
-@media (max-width: 400px) { .brand-name { font-size: 1.3rem; } .brand-symbol { width: 40px; height: 40px; border-radius: 10px; } }

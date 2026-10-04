@@ -393,22 +393,18 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 
 @media (max-width: 700px) { .budget-month-filter { display: flex; } .budget-month-filter > div { flex: 1; min-width: 210px; } }
 
-/* Keep the wider KLE Coin identity clear of navigation at tablet widths. */
-.topbar { gap: 32px; }
-.topbar nav { gap: 24px; }
+/* The full logo and its tagline are part of the header at every screen size. */
+.topbar { gap: 24px; padding-top: 12px; padding-bottom: 12px; }
+.topbar nav { gap: 20px; align-self: center; min-height: 56px; }
+.topbar nav a { white-space: nowrap; flex-shrink: 0; }
 .account-menu > span:not(.avatar) { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .footer-brand { color: #145b51; font-weight: 600; }
-@media (max-width: 1150px) {
-    .topbar { padding: 16px 24px 0; flex-wrap: wrap; gap: 10px 24px; }
+@media (max-width: 1350px) {
+    .topbar { padding: 12px 24px 0; flex-wrap: wrap; gap: 12px 24px; }
     .topbar nav { order: 3; width: 100%; min-height: 48px; overflow-x: auto; }
-    .topbar nav a { white-space: nowrap; flex-shrink: 0; }
 }
 @media (max-width: 700px) {
-    .topbar { padding: 14px 16px 0; gap: 8px; }
-    .account-menu { gap: 6px; }
-    .account-menu > span:not(.avatar) { max-width: 5rem; }
-    .account-menu .avatar { display: none; }
-    .topbar .brand-link { gap: 8px; }
-    .topbar .brand-name { font-size: 1.3rem; }
-    .topbar .brand-symbol { width: 40px; height: 40px; border-radius: 10px; }
+    .topbar { padding: 12px 16px 0; justify-content: center; gap: 12px; }
+    .account-menu { width: 100%; justify-content: flex-end; gap: 8px; margin-left: 0; }
+    .account-menu > span:not(.avatar) { max-width: 12rem; }
 }

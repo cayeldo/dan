@@ -1,1 +1,1 @@
-<a class="brand-link" href="/" aria-label="KLE Coin home"><span class="brand-symbol" aria-hidden="true"><img src="/assets/kle-coin-logo.png" alt="" width="1536" height="1024"></span><span class="brand-name">KLE <span>Coin</span></span></a>
+<a class="brand-link" href="/" aria-label="KLE Coin home — Plan, Spend, Save, Grow"><img class="brand-logo" src="/assets/kle-coin-logo-v2.png" alt="KLE Coin — Plan | Spend | Save | Grow" width="1536" height="1024"></a>
