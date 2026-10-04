@@ -173,7 +173,8 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · Dan</title>
+    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · KLE Coin</title>
+    <?php require __DIR__ . "/views/brand-head.php"; ?>
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
     <link rel="stylesheet" href="/portal.css?v=<?= substr(hash_file('sha256', __DIR__ . '/portal.css'), 0, 16) ?>">
     <?php if ($page === 'budget'): ?><script src="/budget.js?v=<?= substr(hash_file('sha256', __DIR__ . '/budget.js'), 0, 16) ?>" defer></script><?php endif; ?>
@@ -181,7 +182,7 @@ if ($page === 'home') {
 </head>
 <body class="workspace">
 <header class="topbar">
-    <a class="wordmark" href="/" aria-label="Dan home">dan<span>.</span></a>
+    <?php require __DIR__ . "/views/brand.php"; ?>
     <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=budget" <?= $page === 'budget' ? 'aria-current="page"' : '' ?>>Budget</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
@@ -191,6 +192,6 @@ if ($page === 'home') {
     <?php if ($error): ?><div class="error" role="alert"><?= escape($error) ?></div><?php endif; ?>
     <?php require __DIR__ . '/views/' . $page . '.php'; ?>
 </main>
-<footer>Your space. Your records. <span>Signed in as <?= escape($displayName) ?></span></footer>
+<footer><span class="footer-brand">KLE Coin · Plan. Spend. Save. Grow.</span> <span>Signed in as <?= escape($displayName) ?></span></footer>
 </body>
 </html>

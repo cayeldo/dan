@@ -17,7 +17,7 @@ session_start();
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
-header("Content-Security-Policy: default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 if ($secure) {
     header('Strict-Transport-Security: max-age=31536000');
 }
@@ -92,13 +92,18 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Sign in to Dan.">
-    <title><?= escape($title) ?> · Dan</title>
+    <meta name="description" content="KLE Coin — Plan, spend, save, grow. Your private space to understand spending and build better money habits.">
+    <title><?= escape($title) ?> · KLE Coin</title>
+    <?php require __DIR__ . "/views/brand-head.php"; ?>
+    <meta property="og:title" content="KLE Coin — Plan. Spend. Save. Grow.">
+    <meta property="og:image" content="https://klecoin.com/assets/kle-coin-logo.png">
+    <meta property="og:url" content="https://klecoin.com/">
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
 </head>
-<body>
-<header class="brand"><a href="/" aria-label="Dan home">dan<span>.</span></a><span class="brand-label">YOUR PRIVATE SPACE</span></header>
-<main>
+<body class="auth-page">
+<header class="brand"><?php require __DIR__ . "/views/brand.php"; ?><span class="brand-label">YOUR PRIVATE MONEY SPACE</span></header>
+<main class="auth-main">
+    <div class="auth-artwork"><img src="/assets/kle-coin-logo.png" width="1536" height="1024" alt="KLE Coin. Plan, spend, save, grow."><p>Know where it goes.<br><strong>Choose where you grow.</strong></p></div>
     <section class="card" aria-labelledby="heading">
         <div class="eyebrow"><?= $signedIn ? 'ALL SET' : ($setup ? 'FIRST TIME HERE' : 'ACCOUNT ACCESS') ?></div>
         <h1 id="heading"><?= escape($title) ?></h1>
@@ -133,6 +138,6 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
         <?php endif; ?>
     </section>
 </main>
-<footer>Dan · Private account access</footer>
+<footer>KLE Coin · Your money. Your progress.</footer>
 </body>
 </html>

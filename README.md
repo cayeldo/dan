@@ -1,4 +1,4 @@
-# Dan account login
+# KLE Coin
 
 PHP login screen for the existing DirectAdmin site and MySQL/MariaDB database.
 Requires PHP 8.1+ with PDO MySQL and HTTPS in production. No Composer or Node dependencies.

@@ -36,7 +36,7 @@
             $label = (new DateTimeImmutable($key . '-01'))->format('M'); $ratio = $value === null ? 0 : $value / $peak;
             $tip = month_label($key) . ($key === gmdate('Y-m') ? ' · so far' : '') . "\n" . ($value === null ? 'No imported data' : money($value) . ' in purchases'); ?>
         <a class="month-tile <?= $key === gmdate('Y-m') ? 'in-progress' : '' ?>" href="<?= escape(analyzer_url($key)) ?>" data-tooltip="<?= escape($tip) ?>" aria-label="<?= escape($tip) ?>">
-            <span><?= escape($label) ?></span><svg viewBox="0 0 64 72" aria-hidden="true"><rect width="64" height="72" rx="10" fill="#eff3fa"/><?php if ($value !== null): ?><rect x="0" y="<?= sprintf('%.2F', 72 - max(3, $ratio * 72)) ?>" width="64" height="<?= sprintf('%.2F', max(3, $ratio * 72)) ?>" rx="8" fill="<?= $value === $peak ? '#193d9c' : '#7799ef' ?>"/><?php else: ?><text x="32" y="42" text-anchor="middle" fill="#56657b">—</text><?php endif; ?></svg>
+            <span><?= escape($label) ?></span><svg viewBox="0 0 64 72" aria-hidden="true"><rect width="64" height="72" rx="10" fill="#eff3fa"/><?php if ($value !== null): ?><rect x="0" y="<?= sprintf('%.2F', 72 - max(3, $ratio * 72)) ?>" width="64" height="<?= sprintf('%.2F', max(3, $ratio * 72)) ?>" rx="8" fill="<?= $value === $peak ? '#005f55' : '#5fbaa0' ?>"/><?php else: ?><text x="32" y="42" text-anchor="middle" fill="#56657b">—</text><?php endif; ?></svg>
             <small><?= $key === gmdate('Y-m') ? 'so far' : substr($key, 0, 4) ?></small>
         </a><?php endforeach; ?>
     </div>

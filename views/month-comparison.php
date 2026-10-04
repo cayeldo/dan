@@ -9,7 +9,7 @@ Purchases " . money($value) . "
 Refunds " . money($comparison[$key]['refunds']); ?>
         <a class="comparison-bar" href="<?= escape(analyzer_url($barMonth, $accountFilter)) ?>" data-tooltip="<?= escape($tip) ?>" aria-label="<?= escape($tip) ?>">
             <span><?= escape((new DateTimeImmutable($barMonth . '-01'))->format('M')) ?><?= $barMonth === gmdate('Y-m') ? ' · so far' : '' ?></span>
-            <svg viewBox="0 0 500 38" preserveAspectRatio="none" aria-hidden="true"><rect width="500" height="38" rx="8" fill="#f0f3f8"/><rect width="<?= sprintf('%.2F', $value / $barMax * 500) ?>" height="38" rx="8" fill="<?= $key === 'previous' ? '#b1c2e9' : '#2954d1' ?>"/></svg><strong><?= money($value) ?></strong>
+            <svg viewBox="0 0 500 38" preserveAspectRatio="none" aria-hidden="true"><rect width="500" height="38" rx="8" fill="#f0f3f8"/><rect width="<?= sprintf('%.2F', $value / $barMax * 500) ?>" height="38" rx="8" fill="<?= $key === 'previous' ? '#a0d8c7' : '#00796b' ?>"/></svg><strong><?= money($value) ?></strong>
         </a><?php endforeach; ?>
     </div>
     <p class="comparison-caption <?= $change['delta'] > 0 ? 'change-up' : ($change['delta'] < 0 ? 'change-down' : '') ?>"><?= signed_money($change['delta']) ?> in purchases<?= $month === gmdate('Y-m') ? ' · month in progress' : '' ?></p>

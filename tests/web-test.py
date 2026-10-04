@@ -66,6 +66,7 @@ with tempfile.TemporaryDirectory(prefix='dan-web-test-') as temporary:
     for source in ROOT.glob('*.css'):
         shutil.copy(source, folder)
     shutil.copytree(ROOT / 'views', folder / 'views')
+    shutil.copytree(ROOT / 'assets', folder / 'assets')
     (folder / 'sessions').mkdir()
     simplefin = (folder / 'simplefin.php').read_text().replace('function simplefin_http(', 'function unused_network_simplefin_http(', 1)
     simplefin = simplefin.replace('declare(strict_types=1);', "declare(strict_types=1);\nrequire __DIR__ . '/simplefin-web-fixture.php';", 1)
@@ -169,7 +170,7 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         csrf = token(empty)
         status, connect_page, connect_headers = request('/?page=connect')
         check(status == 200 and 'Three steps to automatic imports' in connect_page and 'Cardmember Service' in connect_page, 'SimpleFIN setup page renders')
-        check(connect_headers['Content-Security-Policy'] == "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", 'SimpleFIN page retains strict app policy without third-party scripts')
+        check(connect_headers['Content-Security-Policy'] == "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", 'SimpleFIN page retains strict app policy without third-party scripts')
         check(request('/?page=connect', {'action': 'sfin_connect', 'csrf': 'wrong'})[0] == 403, 'SimpleFIN connection requires CSRF')
         setup = base64.b64encode(b'https://beta-bridge.simplefin.org/simplefin/claim/test-web-token').decode()
         status, connected, _ = request('/?page=connect', {'action': 'sfin_connect', 'csrf': csrf, 'setup_token': setup})
@@ -365,7 +366,8 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         status, disconnected, _ = request('/?page=connect', {'csrf': other_csrf, 'action': 'sfin_disconnect'})
         check('setup_token' in disconnected and 'Revoke the app token' in disconnected, 'disconnect removes access and explains provider revocation')
         check('$18.25' in request('/?page=analyzer')[1], 'disconnect preserves spending reports')
-        for stylesheet in ['/styles.css', '/portal.css']:
+        check(client.open(base + '/assets/kle-coin-logo.png').headers.get_content_type() == 'image/png', 'brand artwork is served as an image')
+        for stylesheet in ['/styles.css', '/portal.css', '/assets/kle-coin-icon.svg']:
             check(request(stylesheet)[0] == 200, stylesheet + ' served')
         log.flush()
         log.seek(0)
