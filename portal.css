@@ -399,7 +399,7 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .topbar nav a { white-space: nowrap; flex-shrink: 0; }
 .account-menu > span:not(.avatar) { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .footer-brand { color: #145b51; font-weight: 600; }
-@media (max-width: 1350px) {
+@media (max-width: 1200px) {
     .topbar { padding: 12px 24px 0; flex-wrap: wrap; gap: 12px 24px; }
     .topbar nav { order: 3; width: 100%; min-height: 48px; overflow-x: auto; }
 }
