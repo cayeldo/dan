@@ -393,8 +393,8 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 
 @media (max-width: 700px) { .budget-month-filter { display: flex; } .budget-month-filter > div { flex: 1; min-width: 210px; } }
 
-/* The full logo and its tagline are part of the header at every screen size. */
-.topbar { gap: 24px; padding-top: 12px; padding-bottom: 12px; }
+/* A compact horizontal logo keeps the tagline visible without a tall header. */
+.topbar { gap: 24px; padding-top: 8px; padding-bottom: 8px; }
 .topbar nav { gap: 20px; align-self: center; min-height: 56px; }
 .topbar nav a { white-space: nowrap; flex-shrink: 0; }
 .account-menu > span:not(.avatar) { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
