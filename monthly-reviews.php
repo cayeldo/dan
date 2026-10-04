@@ -110,7 +110,7 @@ function month_review_payload(array $input, string $model): array
         'input' => [['role' => 'user', 'content' => json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)]],
         'text' => ['format' => ['type' => 'json_schema', 'name' => 'monthly_spending_review', 'strict' => true,
             'schema' => ['type' => 'object', 'additionalProperties' => false, 'required' => array_keys($properties), 'properties' => $properties]]],
-        'max_output_tokens' => 1200];
+        ...ai_generation_options($model, true)];
 }
 
 function validate_month_review(array $result): array

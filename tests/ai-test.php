@@ -3,7 +3,8 @@ declare(strict_types=1);
 // Reuse the disposable database and import assertions, never a live account.
 require __DIR__ . '/analyzer-test.php';
 $db->exec("INSERT INTO users (id, username) VALUES (3, 'ai_test_user'), (4, 'other_ai_test_user')");
-$config = ['enabled' => true, 'api_key' => 'test-placeholder-not-a-real-key', 'model' => 'gpt-4.1-mini'];
+$config = ['enabled' => true, 'api_key' => 'test-placeholder-not-a-real-key', 'model' => 'gpt-6.1-sol'];
+check(!isset(category_ai_payload([], [], 'gpt-4.1-mini')['reasoning']), 'legacy model overrides do not receive unsupported reasoning parameters');
 $csv = "Date,Transaction,Name,Memo,Amount\n8/1/26,DEBIT,CHEWY.COM,100000000000001; ; confidential@example.test,-12.34\n8/2/26,DEBIT,CHEWY.COM,100000000000002; ; private memo,-4.56\n8/3/26,DEBIT,PLANET FITNESS 8005551212,100000000000003; ; private memo,-20.00\n8/4/26,DEBIT,RED ROBIN 23,100000000000004; 05812,-10.00\n";
 save_import($db, 3, pending_csv($csv));
 $accountId = (int) user_accounts($db, 3)[0]['id'];
@@ -13,6 +14,7 @@ $transport = function (array $payload, array $settings) use ($db, &$calls): arra
     $calls++;
     check(!$db->inTransaction(), 'API request does not hold database locks');
     check($payload['store'] === false && $payload['text']['format']['strict'] === true, 'API uses non-stored structured responses');
+    check($payload['model'] === $settings['model'] && $payload['reasoning']['effort'] === 'low' && $payload['max_output_tokens'] > 2400, 'categorization uses the configured reasoning model with room for reasoning and JSON');
     $input = json_decode($payload['input'][0]['content'], true);
     $encoded = json_encode($input);
     foreach (['12.34', '2026-08', 'confidential@example.test', 'private memo', '100000000000001', '8005551212', 'ai_test_user', 'Test card'] as $private) {

@@ -6,13 +6,14 @@ $db->exec("INSERT INTO users (id, username) VALUES (10, 'review_test'), (11, 're
 $csv = "Date,Name,Amount\n1/5/25,COSTCO,-100\n2/5/25,COSTCO,-200\n3/5/25,COSTCO,-300\n4/5/25,COSTCO,-400\n5/5/25,COSTCO,-500\n6/5/25,COSTCO,-250\n6/6/25,RED ROBIN,-50\n6/7/25,COSTCO,25\n6/8/25,PAYMENT THANK YOU,400\n";
 save_import($db, 10, pending_csv($csv, 0, 'Secret card number'));
 $card = (int) user_accounts($db, 10)[0]['id'];
-$config = ['enabled' => true, 'model' => 'test-only', 'api_key' => 'test-only'];
+$config = ['enabled' => true, 'model' => 'gpt-6.1-sol', 'api_key' => 'test-only'];
 $response = ['headline' => 'A steady month, with room to save', 'summary' => 'Your purchases were $300 this month.', 'bright_spot' => 'Your spending is close to your recent typical month.', 'opportunity' => 'Dining out offers some flexibility.', 'next_steps' => ['Try planning one meal at home.', 'Check your grocery list before shopping.']];
 $calls = [];
 $fake = function ($payload, $config) use (&$calls, $response) {
     $input = json_decode($payload['input'][0]['content'], true);
     $calls[] = $input['month'];
     check($payload['store'] === false && $payload['text']['format']['strict'] === true, 'reviews use non-stored structured responses');
+    check($payload['model'] === $config['model'] && $payload['reasoning']['effort'] === 'medium' && $payload['max_output_tokens'] > 1200, 'reviews use the shared model with room for reasoning before the short final analysis');
     check(!str_contains(json_encode($payload), 'Secret card') && !str_contains(json_encode($input), 'COSTCO') && !isset($input['target_fingerprint']), 'only compact aggregates leave the app');
     return $response;
 };

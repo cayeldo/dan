@@ -8,7 +8,7 @@ function category_ai_config(): array
     $config = is_readable($path) ? json_decode((string) file_get_contents($path), true) : [];
     if (!is_array($config)) { $config = []; }
     $key = trim((string) (getenv('OPENAI_API_KEY') ?: ($config['api_key'] ?? '')));
-    $model = trim((string) (getenv('DAN_AI_MODEL') ?: ($config['model'] ?? 'gpt-4.1-mini')));
+    $model = trim((string) (getenv('DAN_AI_MODEL') ?: ($config['model'] ?? 'gpt-6.1-sol')));
     return ['enabled' => ($config['enabled'] ?? ($key !== '')) === true && $key !== '',
         'api_key' => $key, 'model' => $model];
 }
@@ -71,6 +71,16 @@ function merchant_ai_input(array $job): array
     return ['id' => (string) $job['merchant_id'], 'merchant' => trim($name), 'category_hint' => $job['hint']];
 }
 
+/** Leave explicit legacy model overrides compatible with their existing request format. */
+function ai_generation_options(string $model, bool $review = false): array
+{
+    if ($model === 'gpt-6.1-sol') {
+        // The output budget includes hidden reasoning as well as the final JSON.
+        return ['reasoning' => ['effort' => $review ? 'medium' : 'low'], 'max_output_tokens' => 8192];
+    }
+    return ['max_output_tokens' => $review ? 1200 : 2400];
+}
+
 function category_ai_payload(array $jobs, array $categories, string $model): array
 {
     $ids = array_map(fn($j) => (string) $j['merchant_id'], $jobs);
@@ -85,7 +95,7 @@ function category_ai_payload(array $jobs, array $categories, string $model): arr
                     'properties' => ['id' => ['type' => 'string', 'enum' => $ids],
                         'category' => ['type' => 'string'], 'confidence' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']]],
                     'required' => ['id', 'category', 'confidence']]]]]]],
-        'max_output_tokens' => 2400];
+        ...ai_generation_options($model)];
 }
 
 function request_category_ai(array $payload, array $config): array
@@ -93,7 +103,7 @@ function request_category_ai(array $payload, array $config): array
     if (!function_exists('curl_init')) { throw new RuntimeException('curl_unavailable'); }
     $curl = curl_init('https://api.openai.com/v1/responses');
     $body = '';
-    curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 20,
+    curl_setopt_array($curl, [CURLOPT_POST => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => $config['model'] === 'gpt-6.1-sol' ? 60 : 20,
         CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
         CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $config['api_key'], 'Content-Type: application/json'],

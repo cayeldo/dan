@@ -3,6 +3,14 @@
 PHP login screen for the existing DirectAdmin site and MySQL/MariaDB database.
 Requires PHP 8.1+ with PDO MySQL and HTTPS in production. No Composer or Node dependencies.
 
+## Public URL and deployment
+
+The primary public URL is **https://klecoin.com**. Use this origin for future absolute URLs, links in emails, canonical URLs, and other public links. `https://dan.cayelli.us` redirects to it.
+
+The deployment architecture intentionally remains unchanged. DirectAdmin/Apache serves `klecoin.com` from `/home/cayeldo/domains/dan.cayelli.us/public_html`. Keep using the existing `deploy/deploy-dan.sh` script and cron job; push to `main` and allow roughly a minute for changes to appear on `klecoin.com`.
+
+Do not move or duplicate application files or private configuration into the `klecoin.com` domain directory. Preserve the existing database, private configuration paths, SimpleFIN storage, and background workers. The old domain name in server paths is intentional and must not be replaced as part of a public URL or branding change.
+
 ## Install
 
 1. In phpMyAdmin, select `cayeldo_dan`, open **SQL**, and run [`database/accounts.sql`](database/accounts.sql). It creates `users` and seeds `don` and `dan`. Running it again will not reset passwords. Both accounts initially have `password_hash = NULL`; neither can log in until its owner chooses a password.
@@ -15,7 +23,7 @@ Requires PHP 8.1+ with PDO MySQL and HTTPS in production. No Composer or Node de
    DAN_CONFIG=/home/cayeldo/domains/dan.cayelli.us/dan-config.php php deploy/create-setup-code.php dan
    ```
 
-5. Give each code privately to its account owner. Each person opens `https://dan.cayelli.us`, chooses **Create your password**, and enters their username, setup code, and chosen password twice. They are signed in immediately. Later visits use username and password only.
+5. Give each code privately to its account owner. Each person opens `https://klecoin.com`, chooses **Create your password**, and enters their username, setup code, and chosen password twice. They are signed in immediately. Later visits use username and password only.
 
 Setup codes expire after 24 hours and are consumed on use. Re-run the command to replace an unused/expired code. It refuses to change an account that already has a password. There is no public registration or password-reset feature.
 
@@ -72,9 +80,9 @@ An optional local sample path can be passed to either test command. The provided
 
 ## Automatic AI categories
 
-The app uses the OpenAI Responses API with strict [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) and `store: false`. The default model is [GPT-4.1 Mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), configurable independently of other projects.
+The app uses the OpenAI Responses API with strict [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) and `store: false`. The default model for categorization and monthly reviews is [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol), configurable independently of other projects. Categorization uses low reasoning effort; monthly reviews use medium. Both allow up to 8,192 output tokens including reasoning, while retaining their existing JSON schemas and short review length. Requests time out after 60 seconds; the existing AI cron workers allow 90 seconds to finish and record results. Explicit legacy model overrides retain their previous request settings.
 
-Copy `deploy/dan-ai.example.json` to `/home/cayeldo/domains/dan.cayelli.us/dan-ai.json`, outside `public_html`, and set the API key. Keep the file owned by `cayeldo` with permissions `0600`. Alternatively use `DAN_AI_CONFIG` for a private JSON path, or server-side `OPENAI_API_KEY` and `DAN_AI_MODEL`. Never commit a real key. The nautical app is not modified and its credentials are not required when a dedicated key is configured.
+Copy `deploy/dan-ai.example.json` to `/home/cayeldo/domains/dan.cayelli.us/dan-ai.json`, outside `public_html`, and set the API key. Keep the file owned by `cayeldo` with permissions `0600`. Alternatively use `DAN_AI_CONFIG` for a private JSON path, or server-side `OPENAI_API_KEY` and `DAN_AI_MODEL`. An existing `model` value in the private JSON file overrides the code default; set it to `gpt-6.1-sol` when upgrading (and check for a higher-priority `DAN_AI_MODEL` environment override). The change applies to future AI jobs; saved reviews and learned categories are not regenerated. Never commit a real key. The nautical app is not modified and its credentials are not required when a dedicated key is configured.
 
 Only normalized unfamiliar merchant labels and category hints are submitted, together with category names for that user. Phone-like numbers and email addresses are removed from labels. Transaction amounts, dates, bank references, card/account names, raw memos, and entire statements are not sent. Requests use a fixed HTTPS OpenAI endpoint, verified TLS, no redirects, strict structured output, and application-side validation. `store: false` disables response storage for later retrieval; it does not assert zero provider retention for all purposes.
 
@@ -114,7 +122,7 @@ References: [SimpleFIN Bridge developer guide](https://beta-bridge.simplefin.org
 
 `/?page=admin` lets an explicitly designated administrator create users and issue setup codes. Don is the initial administrator in the live database. Admin membership is stored in the additive `app_admins` table and checked against the database on each request and again inside mutation transactions; it is not taken from session roles or submitted fields. The normal migration creates the table without granting roles or changing any passwords. Membership can be granted/revoked only by an operator with database access.
 
-New users are regular members. **Add user & generate code** creates the account and automatically issues a cryptographically random one-time code. **Generate setup code** replaces the code for an account awaiting its first password. Each code expires in 24 hours, is stored only as a SHA-256 hash in the database, and is cleared after successful password setup. The plaintext code is briefly held in the administrator's server-side session for the POST/redirect/GET flow, shown once on a `no-store` page, and never put in a URL or log. Copy it and share it privately with the intended user, along with their username and `https://dan.cayelli.us/?mode=setup`. Users choose their own passwords. Active passwords cannot be reset using these controls.
+New users are regular members. **Add user & generate code** creates the account and automatically issues a cryptographically random one-time code. **Generate setup code** replaces the code for an account awaiting its first password. Each code expires in 24 hours, is stored only as a SHA-256 hash in the database, and is cleared after successful password setup. The plaintext code is briefly held in the administrator's server-side session for the POST/redirect/GET flow, shown once on a `no-store` page, and never put in a URL or log. Copy it and share it privately with the intended user, along with their username and `https://klecoin.com/?mode=setup`. Users choose their own passwords. Active passwords cannot be reset using these controls.
 
 `admin.php`, `admin-controller.php`, and `views/admin.php` implement the flow; the helpers are blocked by `.htaccess`. All mutations require authentication, current admin membership, and CSRF protection. Admin membership grants user onboarding only; existing spending queries remain scoped to the signed-in user. No automatic emails or role-management UI are included.
 
