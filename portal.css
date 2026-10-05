@@ -434,3 +434,27 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
     .budget-track-row > div:nth-child(2) { grid-row: 2; grid-column: 1 / -1; }
     .budget-track-value { grid-column: 2; grid-row: 1; }
 }
+
+/* Keep the pie chart prominent; budget detail is an optional native disclosure. */
+.budget-progress > .budget-compact-summary { display: flex; align-items: center; gap: 24px; padding: 16px 28px; list-style: none; }
+.budget-compact-summary::-webkit-details-marker { display: none; }
+.budget-compact-summary:hover { background: #f8fbf9; border-radius: 14px; }
+.budget-compact-amount { flex-shrink: 0; }
+.budget-compact-amount strong { margin-left: 10px; font-size: 1.15rem; }
+.budget-compact-amount small { display: block; font-size: .75rem; font-weight: 400; color: #56657b; }
+.budget-not-set { margin-left: 10px; font-weight: 400; color: #56657b; }
+.budget-compact-meter { flex: 1; max-width: 220px; }
+.budget-disclosure-label { margin-left: auto; color: var(--brand); white-space: nowrap; font-size: .85rem; }
+.budget-learn-more, .budget-show-less { text-decoration: underline; text-underline-offset: 3px; }
+.budget-show-less { display: none; }
+.budget-progress[open] > summary .budget-show-less { display: inline; }
+.budget-progress[open] > summary .budget-learn-more { display: none; }
+.budget-disclosure-chevron { display: inline-block; margin-left: 6px; }
+.budget-progress[open] > summary .budget-disclosure-chevron { transform: rotate(90deg); }
+.budget-details { border-top: 1px solid #e0e6ef; padding: 24px 28px; }
+@media (max-width: 700px) {
+    .budget-progress > .budget-compact-summary { padding: 16px 18px; gap: 8px 16px; flex-wrap: wrap; }
+    .budget-compact-meter { order: 3; flex-basis: 100%; max-width: none; }
+    .budget-compact-meter .budget-meter { height: 6px; margin: 0; }
+    .budget-details { padding: 20px 18px; }
+}

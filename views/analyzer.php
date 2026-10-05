@@ -8,7 +8,6 @@
     <div><label for="account-filter">Card</label><select id="account-filter" name="account"><option value="0">All cards</option><?php foreach ($accounts as $account): ?><option value="<?= (int) $account['id'] ?>" <?= (int) $account['id'] === $accountFilter ? 'selected' : '' ?>><?= escape($account['label']) ?></option><?php endforeach; ?></select></div>
     <button type="submit" class="secondary">View report</button><span class="filter-caption">By transaction date · USD</span>
 </form>
-<?php require __DIR__ . '/budget-progress.php'; ?>
 <section class="panel category-panel analyzer-hero" aria-labelledby="category-heading" id="spending-chart">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?><?= $month === gmdate('Y-m') ? ' · SO FAR' : '' ?></div><h2 id="category-heading">Where your money went</h2></div><span class="pill"><?= $report['purchase_count'] ?> purchases</span></div>
     <?php if ($report['expenses'] > 0):
@@ -20,6 +19,7 @@
     <div class="chart-footer"><span>Refunds &amp; credits <strong class="change-down"><?= money($report['refunds']) ?></strong></span><span>Net spending <strong><?= money($report['net']) ?></strong></span><a href="<?= escape(analyzer_url($month, $accountFilter) . '&audit=all#audit-heading') ?>">Browse categories</a></div>
 </section>
 <?php if ($report['ai_pending_count']): ?><p class="subtle-status">Categorizing <?= $report['ai_pending_count'] ?> merchants… <a href="<?= escape(analyzer_url($month, $accountFilter)) ?>">Refresh report</a><span class="sr-only">Automatic categorization is in progress.</span></p><?php endif; ?>
+<?php require __DIR__ . '/budget-progress.php'; ?>
 <?php require __DIR__ . '/monthly-review.php'; ?>
 <?php require __DIR__ . '/category-audit.php'; ?>
 <details class="panel compact-disclosure" id="merchant-totals"><summary>Merchant totals <span class="muted"><?= count($report['merchants']) ?> merchants</span></summary>

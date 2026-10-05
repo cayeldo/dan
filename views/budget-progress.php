@@ -1,11 +1,19 @@
 <?php
 if (!defined('DAN_PORTAL')) { http_response_code(403); exit; }
+$balance = $budgetProgress['total'] ?? null;
+$budgetPercent = $balance ? ($balance['target_cents'] > 0 ? min(100, $balance['spent_cents'] / $balance['target_cents'] * 100) : ($balance['spent_cents'] > 0 ? 100 : 0)) : 0;
 ?>
-<section class="panel budget-progress" aria-labelledby="budget-progress-heading">
+<details class="panel compact-disclosure budget-progress" id="budget-progress">
+    <summary class="budget-compact-summary">
+        <span class="budget-compact-amount">Budget<?php if ($balance): ?> <strong class="budget-<?= escape($balance['status']) ?>"><?= money($balance['available_cents']) ?></strong><?php else: ?> <span class="budget-not-set">Not set</span><?php endif; ?><small>All imported cards</small></span>
+        <?php if ($balance): ?><span class="budget-compact-meter"><svg class="budget-meter budget-<?= escape($balance['status']) ?>" viewBox="0 0 1000 8" preserveAspectRatio="none" role="img" aria-label="<?= escape(money($balance['spent_cents']) . ' spent of ' . money($balance['target_cents']) . ($balance['status'] === 'over' ? ' — over budget' : '')) ?>"><rect width="1000" height="8" rx="4" fill="#edf2f0"/><rect width="<?= sprintf('%.2F', $budgetPercent * 10) ?>" height="8" rx="4" fill="currentColor"/></svg></span><?php endif; ?>
+        <span class="budget-disclosure-label"><span class="budget-learn-more">Learn more</span><span class="budget-show-less">Show less</span><span class="budget-disclosure-chevron" aria-hidden="true"> ›</span></span>
+    </summary>
+    <div class="budget-details">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?> · ALL IMPORTED CARDS</div><h2 id="budget-progress-heading">Your budget at a glance</h2></div><a href="/?page=budget&amp;month=<?= escape($month) ?>"><?= $budgetProgress ? 'Edit budget' : 'Set a budget' ?> ↗</a></div>
     <?php if (!$budgetProgress): ?><p class="hint">Set a budget for this month to track your spending against a plan. Your targets will carry forward.</p>
     <?php else: $balance = $budgetProgress['total']; ?>
-    <?php if ($accountFilter): ?><p class="hint">This budget includes all your imported cards, even while the spending report below is filtered to one card. Budget details open across all cards.</p><?php endif; ?>
+    <?php if ($accountFilter): ?><p class="hint">This budget includes all your imported cards, even while the spending chart above is filtered to one card. Budget details open across all cards.</p><?php endif; ?>
     <div class="budget-progress-summary">
         <div><span class="muted">Budget</span><strong class="budget-figure budget-<?= escape($balance['status']) ?>"><?= money($balance['available_cents']) ?></strong><span><?= money($balance['spent_cents']) ?> spent of <?= money($balance['target_cents']) ?></span><small><?= $balance['status'] === 'over' ? 'Over budget' : ($balance['status'] === 'near' ? '25% or less available' : 'Within budget') ?></small></div>
         <div class="budget-pace"><h3>Spending pace</h3>
@@ -28,4 +36,5 @@ if (!defined('DAN_PORTAL')) { http_response_code(403); exit; }
     </div>
     <p class="hint">Budget figures show target minus purchases, before refunds; card payments are excluded. Unspent amounts in one category can offset overages elsewhere in the overall budget. Targets are not moved automatically.</p>
     <?php endif; ?>
-</section>
+    </div>
+</details>
