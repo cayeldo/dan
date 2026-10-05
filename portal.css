@@ -458,3 +458,13 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
     .budget-compact-meter .budget-meter { height: 6px; margin: 0; }
     .budget-details { padding: 20px 18px; }
 }
+
+.setup-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; padding-bottom: 16px; border-bottom: 1px solid #dbe3ef; }
+.setup-nav a { padding: 10px 14px; color: #56657b; text-decoration: none; border-radius: 8px; font-size: .875rem; }
+.setup-nav a[aria-current] { color: #00685b; background: #e0f0e9; font-weight: 650; }
+.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.setup-card { margin: 0; text-decoration: none; color: inherit; }
+.setup-card p { color: #56657b; line-height: 1.6; }
+.setup-card > span { color: var(--brand); font-weight: 650; }
+.setup-card:hover { border-color: #3a9987; }
+@media (max-width: 700px) { .setup-grid { grid-template-columns: 1fr; } .setup-nav { gap: 4px; } .setup-nav a { padding: 9px 10px; } }

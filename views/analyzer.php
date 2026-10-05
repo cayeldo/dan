@@ -1,6 +1,6 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
 <div class="page-heading analyzer-heading"><h1>Credit card analyzer</h1><span class="muted">Select a slice to explore.</span></div>
-<?php if ($pending): ?><p class="notice"><a href="/?page=statements">Finish reviewing your statement</a></p><?php endif; ?>
+<?php if ($pending): ?><p class="notice"><a href="/?page=imports">Finish reviewing your statement</a></p><?php endif; ?>
 <?php if ($report !== null && $months): ?>
 <form class="report-filter" method="get" action="/">
     <input type="hidden" name="page" value="analyzer">
@@ -35,6 +35,5 @@
 <?php require __DIR__ . '/month-comparison.php'; ?>
 <?php elseif ($report !== null): ?>
 <?php require __DIR__ . '/budget-progress.php'; ?>
-<section class="empty-state"><h2>Your first monthly report is one upload away.</h2><p>Add a statement or connect your card.</p><a class="button" href="/?page=statements">Upload a statement</a></section>
+<section class="empty-state"><h2>Your first monthly report is one upload away.</h2><p>Add a statement or connect your card.</p><a class="button" href="/?page=imports">Upload a statement</a></section>
 <?php endif; ?>
-<?php require __DIR__ . '/import-history.php'; ?>

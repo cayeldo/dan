@@ -57,5 +57,5 @@
 </section>
 <details class="data-note"><summary>About these numbers</summary><p>Based on imported purchases, before refunds. Missing months stay empty. Current-month totals are still in progress; other months may also contain partial statement history. Category links open their latest month with purchases. All-time net spending: <?= money($dashboard['expenses'] - $dashboard['refunds']) ?> after <?= money($dashboard['refunds']) ?> in credits.</p></details>
 <?php elseif ($dashboard !== null): ?>
-<section class="empty-state"><h2>A few charts. A clearer picture.</h2><p>Upload your first statement to begin.</p><a class="button" href="/?page=statements">Upload a statement</a></section>
+<section class="empty-state"><h2>A few charts. A clearer picture.</h2><p>Upload your first statement to begin.</p><a class="button" href="/?page=imports">Upload a statement</a></section>
 <?php endif; ?>

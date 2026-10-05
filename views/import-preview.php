@@ -13,8 +13,8 @@
         </tbody></table></div>
     </details>
     <?php endif; ?>
-    <div class="actions"><form method="post" action="/?page=statements"><?php csrf_field(); ?><input type="hidden" name="action" value="confirm_import"><input type="hidden" name="pending_token" value="<?= escape($pending['token']) ?>"><button type="submit"><?= $preview['added'] > 0 ? 'Save ' . $preview['added'] . ' transactions' : 'Finish — no new transactions' ?></button></form>
-    <form method="post" action="/?page=statements"><?php csrf_field(); ?><input type="hidden" name="action" value="discard_import"><input type="hidden" name="pending_token" value="<?= escape($pending['token']) ?>"><button class="secondary" type="submit">Discard preview</button></form></div>
+    <div class="actions"><form method="post" action="/?page=imports"><?php csrf_field(); ?><input type="hidden" name="action" value="confirm_import"><input type="hidden" name="pending_token" value="<?= escape($pending['token']) ?>"><button type="submit"><?= $preview['added'] > 0 ? 'Save ' . $preview['added'] . ' transactions' : 'Finish — no new transactions' ?></button></form>
+    <form method="post" action="/?page=imports"><?php csrf_field(); ?><input type="hidden" name="action" value="discard_import"><input type="hidden" name="pending_token" value="<?= escape($pending['token']) ?>"><button class="secondary" type="submit">Discard preview</button></form></div>
     <p class="hint">You can correct any merchant or category after saving. Credits are kept separately from purchases.</p>
 </section>
 <?php endif; ?>

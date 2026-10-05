@@ -7,10 +7,11 @@ require __DIR__ . '/analytics.php';
 require __DIR__ . '/monthly-reviews.php';
 require __DIR__ . '/budgets.php';
 require __DIR__ . '/admin.php';
+require __DIR__ . '/statements.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'budget', 'statements', 'connect', 'admin'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'budget', 'statements', 'connect', 'admin', 'setup', 'imports'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -21,7 +22,7 @@ $accounts = []; $categories = []; $months = []; $imports = []; $report = null; $
 $accountFilter = max(0, (int) (is_scalar($_GET['account'] ?? null) ? $_GET['account'] : 0));
 $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
 $requestedMonth = $month;
-$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = []; $budgetProgress = null;
+$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = []; $budgetProgress = null; $statement = null;
 $pending = $_SESSION['pending_import'] ?? null;
 if ($pending && ($pending['user_id'] !== $userId || time() - $pending['created_at'] > 1800)) {
     unset($_SESSION['pending_import']); $pending = null;
@@ -44,7 +45,7 @@ if ($page === 'admin') { require __DIR__ . '/admin-controller.php'; }
 if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
-    $db = in_array($page, ['analyzer', 'statements'], true) ? database() : null;
+    $db = in_array($page, ['analyzer', 'imports', 'statements'], true) ? database() : null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin', 'budget'], true)) {
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ANALYZER_MAX_BYTES + 65536) { throw new InvalidArgumentException('The upload is too large. Choose a CSV smaller than 2 MB.'); }
         if (!hash_equals($_SESSION['csrf'], input('csrf'))) {
@@ -54,7 +55,7 @@ try {
         if ($action === 'logout') {
             $_SESSION = []; session_regenerate_id(true); header('Location: /', true, 303); exit;
         }
-        if (!in_array($page, ['analyzer', 'statements'], true)) { throw new InvalidArgumentException('Open Statements to manage your uploads.'); }
+        if (!in_array($page, ['analyzer', 'imports', 'statements'], true)) { throw new InvalidArgumentException('Open Admin / Setup to manage your uploads.'); }
         if ($action === 'upload') {
             $file = $_FILES['statement'] ?? null;
             if (!is_array($file) || !is_int($file['error'] ?? null) || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
@@ -80,7 +81,7 @@ try {
                 'account_id' => $accountId, 'account_label' => $accountLabel, 'rows' => $rows];
             preview_import($db, $userId, $pending); // Detect conflicting references before offering Save.
             $_SESSION['pending_import'] = $pending;
-            header('Location: /?page=statements', true, 303); exit;
+            header('Location: /?page=imports', true, 303); exit;
         } elseif ($action === 'confirm_import') {
             if (!$pending || !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview expired or was replaced. Upload your CSV again.'); }
             $result = save_import($db, $userId, $pending);
@@ -92,17 +93,17 @@ try {
             redirect_analyzer($result['month']);
         } elseif ($action === 'discard_import') {
             if ($pending && !hash_equals($pending['token'], input('pending_token'))) { throw new InvalidArgumentException('This preview was replaced. Reload before discarding it.'); }
-            unset($_SESSION['pending_import']); header('Location: /?page=statements', true, 303); exit;
+            unset($_SESSION['pending_import']); header('Location: /?page=imports', true, 303); exit;
         } elseif ($action === 'confirm_months') {
             if (input('coverage_confirmed') !== '1') { throw new InvalidArgumentException('Confirm that all posted transactions for every imported card are present.'); }
             $count = confirm_complete_months($db, $userId, input('complete_from'), input('complete_through'));
             $_SESSION['notice'] = $count . ' months confirmed complete. Their reviews will be saved automatically once prepared.';
-            header('Location: /?page=statements&reviews=1#complete-months', true, 303); exit;
+            header('Location: /?page=imports&reviews=1#complete-months', true, 303); exit;
         } elseif ($action === 'reopen_month') {
             $reviewMonth = input('review_month');
             analyzer_query($db, 'UPDATE analyzer_month_closures SET complete = 0 WHERE user_id = ? AND month = ?', [$userId, $reviewMonth]);
             $_SESSION['notice'] = 'Month marked incomplete. Its saved review is hidden.';
-            header('Location: /?page=statements&reviews=1#complete-months', true, 303); exit;
+            header('Location: /?page=imports&reviews=1#complete-months', true, 303); exit;
         } elseif ($action === 'retry_month_review') {
             $reviewMonth = input('review_month');
             if (!month_is_complete($db, $userId, $reviewMonth)) { throw new InvalidArgumentException('Confirm this month is complete before retrying.'); }
@@ -123,11 +124,12 @@ try {
     http_response_code(503); $error = 'The analyzer is temporarily unavailable. Please try again shortly.';
 }
 
-if (in_array($page, ['analyzer', 'statements'], true)) {
+if (in_array($page, ['analyzer', 'imports', 'statements'], true)) {
     try {
         $db ??= database();
         $accounts = user_accounts($db, $userId);
         if ($accountFilter > 0 && !in_array($accountFilter, array_map('intval', array_column($accounts, 'id')), true)) {
+            if ($page === 'statements') { http_response_code(403); throw new InvalidArgumentException('Choose one of your cards.'); }
             $accountFilter = 0;
         }
         if ($page === 'analyzer') {
@@ -140,13 +142,25 @@ if (in_array($page, ['analyzer', 'statements'], true)) {
             if ($accountFilter === 0 || count($accounts) === 1) { $monthlyReview = saved_month_review($db, $userId, $month); }
             $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
         }
-        $imports = analyzer_query($db, 'SELECT i.*, a.label AS account FROM analyzer_imports i JOIN analyzer_accounts a ON a.id = i.account_id WHERE i.user_id = ? ORDER BY i.id DESC LIMIT 5', [$userId])->fetchAll();
         if ($page === 'statements') {
+            $months = report_months($db, $userId, $accountFilter);
+            $month = $requestedMonth !== '' ? $requestedMonth : ($months[0] ?? gmdate('Y-m'));
+            $statement = spending_statement($db, $userId, $month, $accountFilter, $displayName);
+            if (($_GET['download'] ?? '') === 'pdf') {
+                $pdf = statement_pdf($statement);
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="kle-coin-' . $month . '-statement.pdf"');
+                header('Content-Length: ' . strlen($pdf));
+                echo $pdf; exit;
+            }
+        }
+        $imports = analyzer_query($db, 'SELECT i.*, a.label AS account FROM analyzer_imports i JOIN analyzer_accounts a ON a.id = i.account_id WHERE i.user_id = ? ORDER BY i.id DESC LIMIT 5', [$userId])->fetchAll();
+        if ($page === 'imports') {
             $months = report_months($db, $userId);
             $closedMonths = analyzer_query($db, 'SELECT c.*, r.status AS review_status FROM analyzer_month_closures c LEFT JOIN analyzer_month_reviews r ON r.user_id = c.user_id AND r.month = c.month WHERE c.user_id = ? ORDER BY c.month DESC', [$userId])->fetchAll();
             foreach ($closedMonths as &$closed) { $closed['complete'] = month_is_complete($db, $userId, $closed['month']); } unset($closed);
         }
-        if ($pending && $page === 'statements') { $preview = preview_import($db, $userId, $pending); }
+        if ($pending && $page === 'imports') { $preview = preview_import($db, $userId, $pending); }
     } catch (InvalidArgumentException $exception) { $error = $exception->getMessage(); }
     catch (Throwable $exception) {
         error_log('Dan analyzer report failed: ' . get_class($exception));
@@ -174,23 +188,25 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · KLE Coin</title>
+    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'imports' => 'Imports & monthly reviews', 'setup' => 'Admin / Setup', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · KLE Coin</title>
     <?php require __DIR__ . "/views/brand-head.php"; ?>
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
     <link rel="stylesheet" href="/portal.css?v=<?= substr(hash_file('sha256', __DIR__ . '/portal.css'), 0, 16) ?>">
     <?php if ($page === 'budget'): ?><script src="/budget.js?v=<?= substr(hash_file('sha256', __DIR__ . '/budget.js'), 0, 16) ?>" defer></script><?php endif; ?>
+    <?php if ($page === 'statements'): ?><link rel="stylesheet" href="/statement.css?v=<?= substr(hash_file('sha256', __DIR__ . '/statement.css'), 0, 16) ?>"><?php endif; ?>
     <script src="/charts.js?v=<?= substr(hash_file('sha256', __DIR__ . '/charts.js'), 0, 16) ?>" defer></script>
 </head>
 <body class="workspace">
 <header class="topbar">
     <?php require __DIR__ . "/views/brand.php"; ?>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=budget" <?= $page === 'budget' ? 'aria-current="page"' : '' ?>>Budget</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=connect" <?= $page === 'connect' ? 'aria-current="page"' : '' ?>>Connect card</a><?php if ($isAdmin): ?><a href="/?page=admin" <?= $page === 'admin' ? 'aria-current="page"' : '' ?>>Admin</a><?php endif; ?></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=setup" <?= in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin'], true) ? 'aria-current="page"' : '' ?>>Admin / Setup</a></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>
 <main class="workspace-main">
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="error" role="alert"><?= escape($error) ?></div><?php endif; ?>
+    <?php if (in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin'], true)) { require __DIR__ . '/views/setup-nav.php'; } ?>
     <?php require __DIR__ . '/views/' . $page . '.php'; ?>
 </main>
 <footer><span class="footer-brand">KLE Coin · Plan. Spend. Save. Grow.</span> <span>Signed in as <?= escape($displayName) ?></span></footer>
