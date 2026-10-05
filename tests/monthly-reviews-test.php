@@ -68,3 +68,34 @@ check(run_month_review($db, 12, $nested, $config) === 1 && $nestedCalls === 1, '
 try { validate_month_review($response + []); validate_month_review(['headline' => 'Incomplete']); throw new Exception('invalid result accepted'); }
 catch (RuntimeException $error) { check($error->getMessage() === 'invalid_response', 'malformed output is never displayed as a completed review'); }
 echo "All monthly review checks passed.\n";
+
+// New completed reviews include saved targets and retrospective pacing; old reviews stay saved.
+$plan = budget_plan($db, 10, '2025-06');
+$amounts = array_fill_keys(array_keys($plan['groups']), '200');
+save_budget($db, 10, '2025-06', $amounts, budget_form_version($plan));
+$input = month_review_input($db, 10, '2025-06');
+check($input['budget']['total']['spent_cents'] === month_review_facts($db, 10, '2025-06')['purchases_cents'], 'AI budget facts use the same purchases as the monthly analysis');
+check($input['budget']['total']['available_cents'] === $input['budget']['total']['target_cents'] - $input['budget']['total']['spent_cents'], 'AI receives calculated overall budget variance');
+check($input['budget']['pace_checkpoint']['day'] === 15 && isset($input['budget']['categories'][0]['halfway_spent_cents']), 'final review receives retrospective halfway pace for the overall budget and categories');
+$beforeAttempts = analyzer_query($db, "SELECT attempts FROM analyzer_month_reviews WHERE user_id = ? AND month = ?", [10, '2025-06'])->fetchColumn();
+check(!saved_month_review($db, 10, '2025-06')['budget_included'], 'old saved reviews honestly disclose that no budget was included');
+run_month_review($db, 10, $fake, $config);
+check(analyzer_query($db, "SELECT attempts FROM analyzer_month_reviews WHERE user_id = ? AND month = ?", [10, '2025-06'])->fetchColumn() === $beforeAttempts, 'adding a budget never regenerates an existing review');
+
+$db->exec("INSERT INTO users (id, username) VALUES (14, 'budget_review_test')");
+save_import($db, 14, pending_csv("Date,Name,Amount\n1/5/25,COSTCO,-40\n1/22/25,COSTCO,-10\n", 0, 'Review test card'));
+$plan = budget_plan($db, 14, '2025-01');
+save_budget($db, 14, '2025-01', ['misc' => '100'], budget_form_version($plan));
+confirm_complete_months($db, 14, '2025-01', '2025-01');
+$newReviewCalls = 0;
+$budgetFake = function ($payload) use (&$newReviewCalls, $response) {
+    $newReviewCalls++;
+    $facts = json_decode($payload['input'][0]['content'], true);
+    check($facts['budget']['total']['available_cents'] === 5000 && $facts['budget']['pace_checkpoint']['spent_cents'] === 4000, 'worker sends actual budget results and halfway spending to the model');
+    return $response;
+};
+check(run_month_review($db, 14, $budgetFake, $config) === 1 && saved_month_review($db, 14, '2025-01')['budget_included'], 'a new saved review records that it included the budget');
+$plan = budget_plan($db, 14, '2025-01');
+save_budget($db, 14, '2025-01', ['misc' => '120'], budget_form_version($plan));
+check(saved_month_review($db, 14, '2025-01')['stale'], 'changed targets flag a saved budget-aware review as original');
+check(run_month_review($db, 14, $budgetFake, $config) === 0 && $newReviewCalls === 1, 'budget adjustments cannot trigger repeat AI generation');

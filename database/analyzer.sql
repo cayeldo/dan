@@ -167,3 +167,15 @@ CREATE TABLE IF NOT EXISTS analyzer_budgets (
     PRIMARY KEY (user_id, month),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Freeze elapsed inherited months without turning them into future target changes.
+CREATE TABLE IF NOT EXISTS analyzer_budget_snapshots (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    groups_json MEDIUMTEXT NOT NULL,
+    targets_json MEDIUMTEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

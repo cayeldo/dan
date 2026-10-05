@@ -10,7 +10,7 @@ try {
         $budgetMonth = input('budget_month');
         $budgetValues = is_array($_POST['targets'] ?? null) ? $_POST['targets'] : [];
         save_budget($budgetDb, $userId, $budgetMonth, $budgetValues, input('budget_version'));
-        $_SESSION['notice'] = 'Monthly budget saved.';
+        $_SESSION['notice'] = 'Budget saved. These targets carry forward until your next saved change.';
         header('Location: /?page=budget&month=' . rawurlencode($budgetMonth), true, 303); exit;
     }
     $budget = budget_plan($budgetDb, $userId, $budgetMonth);

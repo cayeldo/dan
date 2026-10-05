@@ -8,6 +8,7 @@
     <div><label for="account-filter">Card</label><select id="account-filter" name="account"><option value="0">All cards</option><?php foreach ($accounts as $account): ?><option value="<?= (int) $account['id'] ?>" <?= (int) $account['id'] === $accountFilter ? 'selected' : '' ?>><?= escape($account['label']) ?></option><?php endforeach; ?></select></div>
     <button type="submit" class="secondary">View report</button><span class="filter-caption">By transaction date · USD</span>
 </form>
+<?php require __DIR__ . '/budget-progress.php'; ?>
 <section class="panel category-panel analyzer-hero" aria-labelledby="category-heading" id="spending-chart">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?><?= $month === gmdate('Y-m') ? ' · SO FAR' : '' ?></div><h2 id="category-heading">Where your money went</h2></div><span class="pill"><?= $report['purchase_count'] ?> purchases</span></div>
     <?php if ($report['expenses'] > 0):
@@ -33,6 +34,7 @@
 <?php if ($report['payment_rows']): ?><details class="panel payments"><summary>Card payments · <?= money($report['payments']) ?> excluded from spending</summary><div class="table-scroll"><table><thead><tr><th>Date</th><th>Card</th><th class="number">Payment</th></tr></thead><tbody><?php foreach ($report['payment_rows'] as $payment): ?><tr><td><?= escape($payment['transaction_date']) ?></td><td><?= escape($payment['account']) ?></td><td class="number"><?= money((int) $payment['amount_cents']) ?></td></tr><?php endforeach; ?></tbody></table></div></details><?php endif; ?>
 <?php require __DIR__ . '/month-comparison.php'; ?>
 <?php elseif ($report !== null): ?>
+<?php require __DIR__ . '/budget-progress.php'; ?>
 <section class="empty-state"><h2>Your first monthly report is one upload away.</h2><p>Add a statement or connect your card.</p><a class="button" href="/?page=statements">Upload a statement</a></section>
 <?php endif; ?>
 <?php require __DIR__ . '/import-history.php'; ?>

@@ -41,3 +41,13 @@ $currentHistory = [gmdate('Y-m', strtotime('first day of last month')) => $histo
 check(spending_dashboard($currentHistory)['average'] === 30000, 'average excludes the in-progress current month');
 check(substr_count(donut_slice_path(0, 1), ' A ') === 4 && !str_contains(donut_slice_path(.25, .5), 'NAN'), 'donut geometry supports one-category and partial wedges');
 echo "All spending analytics checks passed.\n";
+
+$partial = spending_comparison($history, '2026-01', '2026-01-02');
+check($partial['current']['expenses'] === 20000 && $partial['previous']['expenses'] === 20000, 'in-progress comparison uses the same calendar cutoff on both months');
+check($partial['current_day'] === 2 && $partial['previous_day'] === 2 && $partial['partial'], 'comparison exposes its actual cutoff days');
+save_import($db, 3, pending_csv("Date,Name,Amount\n2/28/26,COSTCO,-10\n3/31/26,COSTCO,-20\n", $account));
+$short = spending_comparison(spending_history($db, 3), '2026-03', '2026-03-31');
+check($short['previous_day'] === 28 && $short['current_day'] === 31 && $short['previous']['expenses'] === 1000, 'short previous months cap the cutoff at their last day');
+$early = spending_comparison(spending_history($db, 3), '2026-03', '2026-03-01');
+check($early['available'] && $early['previous']['expenses'] === 0 && $early['total']['percent'] === null, 'a known month with only later transactions has zero in the compared window');
+check(spending_comparison($history, '2026-01', '2026-02-05')['current']['expenses'] === 30000, 'ended months retain full-month comparisons');

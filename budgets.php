@@ -29,7 +29,7 @@ function budget_plan(PDO $db, int $user, string $month): array
     if (!budget_month_valid($month)) { throw new InvalidArgumentException('Choose a valid budget month.'); }
     $history = budget_history($db, $user, $month);
     $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$user])->fetchAll();
-    $saved = analyzer_query($db, 'SELECT * FROM analyzer_budgets WHERE user_id = ? AND month = ?', [$user, $month])->fetch();
+    $saved = effective_budget($db, $user, $month);
     if ($saved) {
         $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
         $targets = json_decode($saved['targets_json'], true, 32, JSON_THROW_ON_ERROR);
@@ -64,7 +64,7 @@ function budget_plan(PDO $db, int $user, string $month): array
         if (count($examples[$key]) < 3) { $examples[$key][] = ['name' => $merchant['name'], 'category' => $merchant['category']]; }
     }
     return ['month' => $month, 'groups' => $groups, 'targets' => $targets, 'averages' => $averages, 'history' => $history, 'examples' => $examples,
-        'misc_categories' => array_column($miscCategories, 'name'), 'revision' => (int) ($saved['revision'] ?? 0), 'updated_at' => $saved['updated_at'] ?? null];
+        'misc_categories' => array_column($miscCategories, 'name'), 'source_month' => $saved['month'] ?? null, 'snapshot' => (bool) ($saved['snapshot'] ?? false), 'revision' => (int) ($saved['revision'] ?? 0), 'updated_at' => $saved['updated_at'] ?? null];
 }
 
 function budget_category_explanation(string $name): string
@@ -92,7 +92,7 @@ function budget_category_explanation(string $name): string
 
 function budget_form_version(array $plan): string
 {
-    return hash('sha256', json_encode([$plan['month'], $plan['revision'], $plan['groups']], JSON_THROW_ON_ERROR));
+    return hash('sha256', json_encode([$plan['month'], $plan['source_month'], $plan['snapshot'], $plan['revision'], $plan['groups'], $plan['targets']], JSON_THROW_ON_ERROR));
 }
 
 function budget_target_cents(string $value): int
@@ -123,11 +123,84 @@ function save_budget(PDO $db, int $user, string $month, array $amounts, string $
             $targets[$key] = budget_target_cents($value);
         }
         $json = json_encode($targets, JSON_THROW_ON_ERROR); $now = gmdate('Y-m-d H:i:s');
-        if ($plan['revision']) {
+        // Freeze elapsed inherited months before changing their source budget.
+        freeze_past_budgets($db, $user, $month);
+        if ($plan['source_month'] === $month && !$plan['snapshot']) {
             analyzer_query($db, 'UPDATE analyzer_budgets SET targets_json = ?, revision = revision + 1, updated_at = ? WHERE user_id = ? AND month = ?', [$json, $now, $user, $month]);
         } else {
             analyzer_query($db, 'INSERT INTO analyzer_budgets (user_id, month, groups_json, targets_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [$user, $month, json_encode($plan['groups'], JSON_THROW_ON_ERROR), $json, $now, $now]);
         }
+        analyzer_query($db, 'DELETE FROM analyzer_budget_snapshots WHERE user_id = ? AND month = ?', [$user, $month]);
         $db->commit();
     } catch (Throwable $error) { if ($db->inTransaction()) { $db->rollBack(); } throw $error; }
+}
+
+/** Effective-dated targets: an explicit later change supersedes an earlier plan. */
+function effective_budget(PDO $db, int $user, string $month): ?array
+{
+    if ($month < gmdate('Y-m')) {
+        $snapshot = analyzer_query($db, 'SELECT * FROM analyzer_budget_snapshots WHERE user_id = ? AND month = ?', [$user, $month])->fetch();
+        if ($snapshot) { return $snapshot + ['snapshot' => true, 'revision' => 1, 'updated_at' => $snapshot['created_at']]; }
+    }
+    $row = analyzer_query($db, 'SELECT * FROM analyzer_budgets WHERE user_id = ? AND month <= ? ORDER BY month DESC LIMIT 1', [$user, $month])->fetch();
+    return $row ?: null;
+}
+
+/** Called only inside the user's save lock; never mutate history while rendering. */
+function freeze_past_budgets(PDO $db, int $user, string $editing): void
+{
+    $rows = analyzer_query($db, 'SELECT * FROM analyzer_budgets WHERE user_id = ? ORDER BY month', [$user])->fetchAll();
+    if (!$rows) { return; }
+    $byMonth = array_column($rows, null, 'month'); $source = null;
+    $frozen = analyzer_query($db, 'SELECT month FROM analyzer_budget_snapshots WHERE user_id = ?', [$user])->fetchAll(PDO::FETCH_COLUMN);
+    $now = gmdate('Y-m-d H:i:s');
+    for ($date = new DateTimeImmutable($rows[0]['month'] . '-01'); $date->format('Y-m') < gmdate('Y-m'); $date = $date->modify('+1 month')) {
+        $key = $date->format('Y-m');
+        if (isset($byMonth[$key])) { $source = $byMonth[$key]; continue; }
+        if ($key === $editing || in_array($key, $frozen, true)) { continue; }
+        analyzer_query($db, 'INSERT INTO analyzer_budget_snapshots (user_id, month, groups_json, targets_json, created_at) VALUES (?, ?, ?, ?, ?)',
+            [$user, $key, $source['groups_json'], $source['targets_json'], $now]);
+    }
+}
+
+function budget_balance(int $target, int $spent): array
+{
+    $available = $target - $spent;
+    return ['target_cents' => $target, 'spent_cents' => $spent, 'available_cents' => $available,
+        'status' => $available < 0 ? 'over' : ($available * 4 <= $target ? 'near' : 'within')];
+}
+
+function budget_progress(PDO $db, int $user, string $month, ?string $today = null): ?array
+{
+    $saved = effective_budget($db, $user, $month);
+    if (!$saved) { return null; }
+    $today ??= gmdate('Y-m-d');
+    $current = $month === substr($today, 0, 7);
+    $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
+    $targets = json_decode($saved['targets_json'], true, 32, JSON_THROW_ON_ERROR);
+    $history = spending_history($db, $user);
+    $period = $history[$month] ?? ['expenses' => 0, 'categories' => [], 'daily' => []];
+    if ($current) { $period = spending_through_day($period, (int) substr($today, 8, 2)); }
+    $individual = array_column(array_filter($groups, fn($g) => $g['category_id'] !== null), 'category_id');
+    $days = (int) (new DateTimeImmutable($month . '-01'))->format('t');
+    $elapsed = (int) substr($today, 8, 2);
+    $halfDay = (int) floor($days / 2);
+    $halfway = spending_through_day($period, $halfDay);
+    $daily = array_filter($period['daily'] ?? [], fn($d) => $d['expenses'] > 0);
+    $lastDay = $daily ? max(array_keys($daily)) : 0;
+    $purchaseCount = array_sum(array_column($daily, 'purchase_count'));
+    $paceReady = $current && $elapsed >= 7 && $purchaseCount >= 3 && $lastDay >= $elapsed - 7;
+    $items = [];
+    foreach ($groups as $key => $group) {
+        $members = array_filter($period['categories'], fn($c) => $key === 'misc' ? !in_array($c['id'], $individual, true) : $c['id'] === $group['category_id']);
+        $spent = array_sum(array_column($members, 'amount'));
+        $halfMembers = array_filter($halfway['categories'], fn($c) => $key === 'misc' ? !in_array($c['id'], $individual, true) : $c['id'] === $group['category_id']);
+        $items[$key] = $group + budget_balance((int) $targets[$key], $spent) + ['members' => array_values($members), 'halfway_spent_cents' => array_sum(array_column($halfMembers, 'amount')),
+            'projected_cents' => $paceReady ? (int) round($spent / $elapsed * $days) : null];
+    }
+    return ['month' => $month, 'source_month' => $saved['month'], 'current' => $current,
+        'halfway_day' => $halfDay, 'halfway_spent_cents' => $halfway['expenses'],
+        'complete' => month_is_complete($db, $user, $month), 'days_elapsed' => $elapsed, 'days_in_month' => $days,
+        'groups' => $items, 'total' => budget_balance(array_sum($targets), $period['expenses']) +
+            ['projected_cents' => $paceReady ? (int) round($period['expenses'] / $elapsed * $days) : null]];
 }

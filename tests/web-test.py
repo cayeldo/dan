@@ -238,10 +238,12 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         check(request('/?page=budget', dict(budget_fields, csrf='wrong'))[0] == 403, 'budget saves require CSRF')
         check('Enter a monthly amount' in request('/?page=budget', dict(budget_fields, **{'targets[misc]': ''}))[1], 'empty budget targets are rejected by the server')
         status, saved_budget, _ = request('/?page=budget', budget_fields)
-        check(status == 200 and 'Monthly budget saved.' in saved_budget and 'value="125.50"' in saved_budget and '$125.50' in saved_budget, 'budget persists the entered amount and total')
+        check(status == 200 and 'Budget saved.' in saved_budget and 'value="125.50"' in saved_budget and '$125.50' in saved_budget, 'budget persists the entered amount and total')
         check('changed in another tab' in request('/?page=budget', budget_fields)[1], 'stale form cannot overwrite a saved budget')
         check('value="125.50"' in request('/?page=budget&month=2026-09')[1], 'saved targets load without reentering them')
-        check('value="125.50"' not in request('/?page=budget&month=2026-10')[1], 'a different month does not silently inherit targets')
+        check('value="125.50"' in request('/?page=budget&month=2026-10')[1], 'the next month inherits the saved budget')
+        progress_page = request('/?page=analyzer&month=2026-09')[1]
+        check('Your budget at a glance' in progress_page and 'What’s in Misc?' in progress_page and 'Spending pace' in progress_page, 'analyzer shows saved targets, grouped details, and calculated pace')
 
         if os.environ.get('DAN_PREVIEW_DIR'):
             destination = Path(os.environ['DAN_PREVIEW_DIR'])

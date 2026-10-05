@@ -6,7 +6,7 @@
 <?php if ($dashboard && $dashboard['latest']): $latest = $dashboard['latest']; $latestPeriod = $history[$latest]; ?>
 <section class="overview-metrics" aria-label="Spending overview">
     <div><span><?= escape(month_label($latest)) ?><?= $latest === gmdate('Y-m') ? ' · so far' : '' ?></span><strong><?= money($latestPeriod['expenses']) ?></strong></div>
-    <div><span>vs <?= escape(month_label(previous_month($latest))) ?></span><strong class="<?= $dashboard['comparison']['available'] ? ($dashboard['comparison']['total']['delta'] > 0 ? 'change-up' : 'change-down') : '' ?>"><?= $dashboard['comparison']['available'] ? signed_money($dashboard['comparison']['total']['delta']) : '—' ?></strong></div>
+    <div><span>vs <?= escape(month_label(previous_month($latest))) ?><?= $dashboard['comparison']['partial'] ? ' · through day ' . (int) $dashboard['comparison']['previous_day'] : '' ?></span><strong class="<?= $dashboard['comparison']['available'] ? ($dashboard['comparison']['total']['delta'] > 0 ? 'change-up' : 'change-down') : '' ?>"><?= $dashboard['comparison']['available'] ? signed_money($dashboard['comparison']['total']['delta']) : '—' ?></strong></div>
     <div><span>All-time purchases</span><strong><?= money($dashboard['expenses']) ?></strong></div>
 </section>
 <?php if ($latestReview && !$latestReview['stale']): ?>

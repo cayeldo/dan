@@ -21,7 +21,7 @@ $accounts = []; $categories = []; $months = []; $imports = []; $report = null; $
 $accountFilter = max(0, (int) (is_scalar($_GET['account'] ?? null) ? $_GET['account'] : 0));
 $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
 $requestedMonth = $month;
-$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = [];
+$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = []; $budgetProgress = null;
 $pending = $_SESSION['pending_import'] ?? null;
 if ($pending && ($pending['user_id'] !== $userId || time() - $pending['created_at'] > 1800)) {
     unset($_SESSION['pending_import']); $pending = null;
@@ -136,6 +136,7 @@ if (in_array($page, ['analyzer', 'statements'], true)) {
             $report = monthly_report($db, $userId, $month, $accountFilter);
             $history = spending_history($db, $userId, $accountFilter);
             $comparison = spending_comparison($history, $month);
+            $budgetProgress = budget_progress($db, $userId, $month);
             if ($accountFilter === 0 || count($accounts) === 1) { $monthlyReview = saved_month_review($db, $userId, $month); }
             $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
         }
