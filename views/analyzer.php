@@ -18,9 +18,9 @@
     else: ?><p class="empty-inline">No purchases in this month.</p><?php endif; ?>
     <div class="chart-footer"><span>Refunds &amp; credits <strong class="change-down"><?= money($report['refunds']) ?></strong></span><span>Net spending <strong><?= money($report['net']) ?></strong></span><a href="<?= escape(analyzer_url($month, $accountFilter) . '&audit=all#audit-heading') ?>">Browse categories</a></div>
 </section>
+<?php require __DIR__ . '/monthly-review.php'; ?>
 <?php if ($report['ai_pending_count']): ?><p class="subtle-status">Categorizing <?= $report['ai_pending_count'] ?> merchants… <a href="<?= escape(analyzer_url($month, $accountFilter)) ?>">Refresh report</a><span class="sr-only">Automatic categorization is in progress.</span></p><?php endif; ?>
 <?php require __DIR__ . '/budget-progress.php'; ?>
-<?php require __DIR__ . '/monthly-review.php'; ?>
 <?php require __DIR__ . '/category-audit.php'; ?>
 <details class="panel compact-disclosure" id="merchant-totals"><summary>Merchant totals <span class="muted"><?= count($report['merchants']) ?> merchants</span></summary>
     <?php if ($report['merchants']): ?><div class="table-scroll"><table class="merchant-table"><thead><tr><th>Merchant</th><th>Category</th><th class="number">Purchases</th><th class="number">Credits</th><th class="number">Net spending</th><th><span class="sr-only">Edit and transaction details</span></th></tr></thead><tbody>

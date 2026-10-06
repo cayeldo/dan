@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS analyzer_simplefin_history (
     CONSTRAINT simplefin_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- A past month needs explicit coverage evidence, not merely some transactions.
+-- Review eligibility: user-confirmed coverage or a scheduled imported-data snapshot.
 CREATE TABLE IF NOT EXISTS analyzer_month_closures (
     user_id BIGINT UNSIGNED NOT NULL,
     month CHAR(7) NOT NULL,

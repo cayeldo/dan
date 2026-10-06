@@ -14,7 +14,7 @@ $fake = function ($payload, $config) use (&$calls, $response) {
     $calls[] = $input['month'];
     check($payload['store'] === false && $payload['text']['format']['strict'] === true, 'reviews use non-stored structured responses');
     check($payload['model'] === $config['model'] && $payload['reasoning']['effort'] === 'medium' && $payload['max_output_tokens'] > 1200, 'reviews use the shared model with room for reasoning before the short final analysis');
-    check(!str_contains(json_encode($payload), 'Secret card') && !str_contains(json_encode($input), 'COSTCO') && !isset($input['target_fingerprint']), 'only compact aggregates leave the app');
+    check(!str_contains(json_encode($payload), 'Secret card') && !isset($input['transactions']) && !isset($input['target_fingerprint']), 'only compact aggregates leave the app');
     return $response;
 };
 check(saved_month_review($db, 10, '2025-06') === null && run_month_review($db, 10, $fake, $config) === 0 && !$calls, 'past transactions alone never trigger or show an AI review');
@@ -99,3 +99,76 @@ $plan = budget_plan($db, 14, '2025-01');
 save_budget($db, 14, '2025-01', ['misc' => '120'], budget_form_version($plan));
 check(saved_month_review($db, 14, '2025-01')['stale'], 'changed targets flag a saved budget-aware review as original');
 check(run_month_review($db, 14, $budgetFake, $config) === 0 && $newReviewCalls === 1, 'budget adjustments cannot trigger repeat AI generation');
+
+// Automatic scheduling uses Eastern time, catches up after the 5th, and never certifies coverage.
+$db->exec("INSERT INTO users (id, username) VALUES (15, 'scheduled_review'), (16, 'scheduled_empty'), (17, 'scheduled_reopened')");
+save_import($db, 15, pending_csv("Date,Name,Amount\n9/20/25,COSTCO,-40\n", 0, 'Scheduled card'));
+save_import($db, 17, pending_csv("Date,Name,Amount\n9/20/25,COSTCO,-20\n", 0, 'Reopened card'));
+confirm_complete_months($db, 17, '2025-09', '2025-09');
+analyzer_query($db, 'UPDATE analyzer_month_closures SET complete = 0 WHERE user_id = ? AND month = ?', [17, '2025-09']);
+$beforeFifth = new DateTimeImmutable('2025-10-05T03:59:59Z');
+$onFifth = new DateTimeImmutable('2025-10-05T04:00:00Z');
+check(queue_scheduled_month_reviews($db, 15, $beforeFifth) === 0, 'automatic reviews wait until the 5th in Eastern time');
+check(queue_scheduled_month_reviews($db, 15, $onFifth) === 1, 'the 5th queues the preceding calendar month without confirmation');
+check(queue_scheduled_month_reviews($db, 15, $onFifth) === 0, 'repeated scheduler runs cannot duplicate a month');
+check(queue_scheduled_month_reviews($db, 16, $onFifth) === 0 && queue_scheduled_month_reviews($db, 17, $onFifth) === 0, 'empty accounts and explicitly reopened months are not auto-queued');
+check(!month_is_complete($db, 15, '2025-09') && month_review_is_ready($db, 15, '2025-09'), 'scheduled snapshots are reviewable without certifying complete bank coverage');
+$autoInput = month_review_input($db, 15, '2025-09');
+check($autoInput['coverage'] === 'imported_transactions_only' && $autoInput['purchases_cents'] === 4000, 'automatic review receives honest coverage and aggregate facts');
+check(run_month_review($db, 15, fn() => $response, $config) === 1, 'the existing worker generates the scheduled snapshot');
+check(run_month_review($db, 15, fn() => throw new RuntimeException('duplicate_call'), $config) === 0, 'scheduled completed reviews are never generated twice');
+$scheduled = saved_month_review($db, 15, '2025-09');
+check($scheduled['coverage'] === 'imported_transactions_only' && !$scheduled['stale'] && (int) $scheduled['prompt_version'] === 3, 'saved automatic review retains coverage and prompt version');
+$autoCard = (int) user_accounts($db, 15)[0]['id'];
+save_import($db, 15, pending_csv("Date,Name,Amount\n9/25/25,COSTCO,-10\n", $autoCard));
+check(saved_month_review($db, 15, '2025-09')['stale'], 'late imports keep an automatic review visible with a changed-data notice');
+save_import($db, 15, pending_csv("Date,Name,Amount\n10/20/25,COSTCO,-20\n", $autoCard));
+check(queue_scheduled_month_reviews($db, 15, new DateTimeImmutable('2025-11-08T12:00:00-05:00')) === 1, 'a worker returning after the 5th catches up');
+check(month_review_input($db, 15, '2025-10')['baseline_count'] === 0, 'unconfirmed snapshots do not become complete comparison history');
+save_import($db, 15, pending_csv("Date,Name,Amount\n12/20/25,COSTCO,-20\n", $autoCard));
+check(queue_scheduled_month_reviews($db, 15, new DateTimeImmutable('2026-01-05T00:00:00-05:00')) === 1 && month_review_is_ready($db, 15, '2025-12'), 'January schedules December of the previous year');
+check(month_review_teaser('Purchases were $50.25. Dining led the month. A third sentence.') === 'Purchases were $50.25. Dining led the month.', 'teasers retain decimal amounts and show at most two sentences');
+check(mb_strlen(month_review_teaser(str_repeat('A useful observation ', 30))) <= 240, 'older long reviews have bounded previews without regeneration');
+echo "All automatic review and teaser checks passed.\n";
+
+// A frequent small merchant must survive alongside much larger one-off purchases.
+$db->exec("INSERT INTO users (id, username) VALUES (18, 'merchant_review'), (19, 'merchant_other')");
+foreach ([5, 7] as $price) {
+    $csv = "Date,Name,Memo,Amount\n";
+    for ($day = 1; $day <= 9; $day++) { $csv .= "8/$day/25,TATTE BAKERY,Private memo,-$price\n"; }
+    $csv .= "8/10/25,TATTE BAKERY,Private refund,5\n8/11/25,PAYMENT THANK YOU,Private payment,100\n9/1/25,TATTE BAKERY,Other month,-20\n";
+    save_import($db, 18, pending_csv($csv, 0, "Private card $price"));
+}
+$merchants = monthly_report($db, 18, '2025-08')['merchants'];
+$tatte = array_values($merchants)[0];
+update_merchant($db, 18, (int) $tatte['id'], 'Tatte Bakery', 0, 'Restaurants');
+$csv = "Date,Name,Amount\n";
+for ($i = 1; $i <= 22; $i++) { $csv .= "8/20/25,Large purchase merchant $i,-1000\n"; }
+save_import($db, 18, pending_csv($csv, 0, 'Large purchase card'));
+save_import($db, 19, pending_csv("Date,Name,Amount\n8/1/25,Other tenant merchant,-8000\n"));
+$merchantFacts = month_review_merchant_facts($db, 18, '2025-08');
+$tatteFacts = $merchantFacts['items'][0];
+check($tatteFacts['name'] === 'Tatte Bakery' && $tatteFacts['purchase_count'] === 18 && $tatteFacts['purchase_days'] === 9, '18 purchases across two cards are counted as transactions, with distinct dates reported separately');
+check($tatteFacts['purchases_cents'] === 10800 && $tatteFacts['average_purchase_cents'] === 600 && $tatteFacts['category'] === 'Restaurants', 'merchant totals and average exclude refunds, payments and other months');
+check(count($merchantFacts['items']) <= 20 && $merchantFacts['merchants_omitted'] > 0 && count(array_filter($merchantFacts['items'], fn($m) => $m['purchases_cents'] === 100000)) >= 10, 'bounded selection includes frequent small purchases and the largest merchants');
+check(!str_contains(json_encode($merchantFacts), 'Other tenant'), 'merchant summaries are scoped to the review owner');
+confirm_complete_months($db, 18, '2025-08', '2025-08');
+analyzer_query($db, "UPDATE analyzer_ai_jobs SET status = 'unresolved' WHERE user_id = ?", [18]);
+$merchantTransport = function ($payload) use ($response) {
+    $input = json_decode($payload['input'][0]['content'], true);
+    check($input['merchants']['items'][0]['name'] === 'Tatte Bakery' && $input['merchants']['items'][0]['purchase_count'] === 18, 'worker actually sends the noteworthy merchant pattern to the model');
+    check(!str_contains(json_encode($input), 'Private') && !str_contains(json_encode($input), '2025-08-01') && !isset($input['merchants']['items'][0]['id']), 'merchant context excludes raw memos, card labels, transaction dates and internal IDs');
+    return $response;
+};
+check(run_month_review($db, 18, $merchantTransport, $config) === 1 && !saved_month_review($db, 18, '2025-08')['stale'], 'merchant-aware review is saved and remains fresh');
+update_merchant($db, 18, (int) $tatte['id'], 'Tatte Bakery 212-555-0199 test@example.com', 0, 'Restaurants');
+$redacted = month_review_merchant_facts($db, 18, '2025-08')['items'][0]['name'];
+check($redacted === 'Tatte Bakery', 'phone-like numbers and email addresses are removed from review merchant labels');
+update_merchant($db, 18, (int) $tatte['id'], 'Renamed bakery', 0, 'Restaurants');
+check(saved_month_review($db, 18, '2025-08')['stale'], 'merchant renames flag new saved reviews as changed without regenerating them');
+$row = analyzer_query($db, 'SELECT input_json FROM analyzer_month_reviews WHERE user_id = ? AND month = ?', [18, '2025-08'])->fetchColumn();
+$legacySnapshot = json_decode($row, true); unset($legacySnapshot['merchants']);
+analyzer_query($db, 'UPDATE analyzer_month_reviews SET input_json = ? WHERE user_id = ? AND month = ?', [json_encode($legacySnapshot), 18, '2025-08']);
+check(!saved_month_review($db, 18, '2025-08')['stale'], 'legacy reviews without merchant context still load without false stale notices');
+check(month_review_merchant_facts($db, 19, '2025-07')['items'] === [], 'empty months do not invent merchant activity');
+echo "All merchant context checks passed.\n";

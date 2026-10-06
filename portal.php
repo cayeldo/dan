@@ -106,7 +106,7 @@ try {
             header('Location: /?page=imports&reviews=1#complete-months', true, 303); exit;
         } elseif ($action === 'retry_month_review') {
             $reviewMonth = input('review_month');
-            if (!month_is_complete($db, $userId, $reviewMonth)) { throw new InvalidArgumentException('Confirm this month is complete before retrying.'); }
+            if (!month_review_is_ready($db, $userId, $reviewMonth)) { throw new InvalidArgumentException('Confirm this month is complete before retrying.'); }
             // Successful reviews can never be regenerated through this action.
             analyzer_query($db, "UPDATE analyzer_month_reviews SET status = 'pending' WHERE user_id = ? AND month = ? AND status = 'failed'", [$userId, $reviewMonth]);
             $_SESSION['notice'] = 'Review retry requested. The saved result will appear when ready.';
@@ -158,7 +158,7 @@ if (in_array($page, ['analyzer', 'imports', 'statements'], true)) {
         if ($page === 'imports') {
             $months = report_months($db, $userId);
             $closedMonths = analyzer_query($db, 'SELECT c.*, r.status AS review_status FROM analyzer_month_closures c LEFT JOIN analyzer_month_reviews r ON r.user_id = c.user_id AND r.month = c.month WHERE c.user_id = ? ORDER BY c.month DESC', [$userId])->fetchAll();
-            foreach ($closedMonths as &$closed) { $closed['complete'] = month_is_complete($db, $userId, $closed['month']); } unset($closed);
+            foreach ($closedMonths as &$closed) { $closed['complete'] = month_review_is_ready($db, $userId, $closed['month']); } unset($closed);
         }
         if ($pending && $page === 'imports') { $preview = preview_import($db, $userId, $pending); }
     } catch (InvalidArgumentException $exception) { $error = $exception->getMessage(); }
