@@ -142,6 +142,7 @@ if (in_array($page, ['analyzer', 'imports', 'statements'], true)) {
             $report = monthly_report($db, $userId, $month, $accountFilter);
             $history = spending_history($db, $userId, $accountFilter);
             $comparison = spending_comparison($history, $month);
+            $overviewInsights = monthly_insights($db, $userId, $history, $month, $accountFilter);
             $budgetProgress = budget_progress($db, $userId, $month);
             if ($accountFilter === 0 || count($accounts) === 1) { $monthlyReview = saved_month_review($db, $userId, $month); }
             $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();

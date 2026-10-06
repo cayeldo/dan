@@ -13,7 +13,7 @@
             <text x="120" y="110" text-anchor="middle" class="donut-label">PURCHASES</text>
             <text x="120" y="137" text-anchor="middle" class="donut-total"><?= money($chartTotal) ?></text>
         </svg>
-        <p class="chart-instruction">Select a slice to explore</p>
+        <?php if ($chartId !== 'monthly'): ?><p class="chart-instruction">Select a slice to explore</p><?php endif; ?>
     </div>
     <ul class="category-legend <?= $chartId === 'cumulative' ? 'overview-legend' : '' ?>">
         <?php foreach ($chartItems as $item): $share = $item['amount'] / max(1, $chartTotal); ?>

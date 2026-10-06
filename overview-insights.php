@@ -10,20 +10,22 @@ function insight_amount(int $cents): string
 }
 
 /** Read-only, deterministic takeaways. Never ask AI to invent a positive or a habit. */
-function overview_insights(PDO $db, int $user, array $history, ?string $today = null): array
+function overview_insights(PDO $db, int $user, array $history, ?string $today = null, ?string $selectedMonth = null, int $account = 0): array
 {
     $today ??= (new DateTimeImmutable('now', new DateTimeZone('America/New_York')))->format('Y-m-d');
     $currentMonth = substr($today, 0, 7);
     $history = array_filter($history, fn($key) => $key <= $currentMonth, ARRAY_FILTER_USE_KEY);
     if (isset($history[$currentMonth])) { $history[$currentMonth] = spending_through_day($history[$currentMonth], (int) substr($today, 8, 2)); }
-    ksort($history); $month = $history ? array_key_last($history) : null;
+    ksort($history); $month = $selectedMonth !== null ? (isset($history[$selectedMonth]) ? $selectedMonth : null) : ($history ? array_key_last($history) : null);
     if (!$month) { return ['month' => null, 'caption' => '', 'rows' => []]; }
     $current = $month === $currentMonth; $period = $history[$month];
     $caption = month_label($month) . ($current ? ' · through ' . (int) substr($today, 8, 2) . ' ' . (new DateTimeImmutable($today))->format('M') : ' · recorded purchases');
     $rows = []; $attentionIds = []; $overIds = [];
-    $url = '/?page=analyzer&month=' . $month;
-    $fund = travel_fund_balance($db, $user, $month, $history);
-    $saved = effective_budget($db, $user, $month);
+    $url = '/?page=analyzer&month=' . $month . ($account > 0 ? '&account=' . $account : '');
+    // Budget and reserve targets cover the user's whole budget, never a subset of cards.
+    $wholeBudget = $account === 0 || count(user_accounts($db, $user)) === 1;
+    $fund = $wholeBudget ? travel_fund_balance($db, $user, $month, $history) : null;
+    $saved = $wholeBudget ? effective_budget($db, $user, $month) : null;
     if ($saved) {
         $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
         $targets = json_decode($saved['targets_json'], true, 32, JSON_THROW_ON_ERROR);
@@ -49,7 +51,9 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
         }
     }
     $end = $current ? $today : (new DateTimeImmutable($month . '-01'))->format('Y-m-t');
-    $merchants = analyzer_query($db, "SELECT m.id, m.name, COUNT(*) AS purchases, SUM(ABS(t.amount_cents)) AS amount FROM analyzer_transactions t JOIN analyzer_merchants m ON m.id = t.merchant_id AND m.user_id = t.user_id WHERE t.user_id = ? AND t.kind = 'expense' AND t.transaction_date >= ? AND t.transaction_date <= ? GROUP BY m.id, m.name HAVING COUNT(*) >= 5 AND SUM(ABS(t.amount_cents)) >= 2500 AND (COUNT(*) >= 8 OR SUM(ABS(t.amount_cents)) >= 10000) ORDER BY purchases DESC, amount DESC, m.id LIMIT 2", [$user, $month . '-01', $end])->fetchAll();
+    $merchantParams = [$user, $month . '-01', $end];
+    if ($account > 0) { $merchantParams[] = $account; }
+    $merchants = analyzer_query($db, "SELECT m.id, m.name, COUNT(*) AS purchases, SUM(ABS(t.amount_cents)) AS amount FROM analyzer_transactions t JOIN analyzer_merchants m ON m.id = t.merchant_id AND m.user_id = t.user_id WHERE t.user_id = ? AND t.kind = 'expense' AND t.transaction_date >= ? AND t.transaction_date <= ?" . ($account > 0 ? ' AND t.account_id = ?' : '') . " GROUP BY m.id, m.name HAVING COUNT(*) >= 5 AND SUM(ABS(t.amount_cents)) >= 2500 AND (COUNT(*) >= 8 OR SUM(ABS(t.amount_cents)) >= 10000) ORDER BY purchases DESC, amount DESC, m.id LIMIT 2", $merchantParams)->fetchAll();
     foreach ($merchants as $merchant) {
         $rows[] = ['visual' => 'frequency', 'name' => $merchant['name'], 'count' => (int) $merchant['purchases'], 'amount_cents' => (int) $merchant['amount'], 'kind' => 'pattern', 'label' => 'Noteworthy pattern', 'title' => (int) $merchant['purchases'] . ' purchases at ' . $merchant['name'],
             'detail' => ucfirst(insight_amount((int) $merchant['amount'])) . ' in total' . ($current ? ' so far this month.' : ' during ' . month_label($month) . '.'),
@@ -65,18 +69,7 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
         $lower = array_filter($comparison['categories'], fn($c) => !in_array($c['id'], $attentionIds, true) && !in_array($c['id'], $overIds, true) && $c['current'] > 0 && $c['delta'] <= -2500 && $c['percent'] !== null && $c['percent'] <= -20);
         usort($lower, fn($a, $b) => ($a['delta'] <=> $b['delta']) ?: ($a['id'] <=> $b['id']));
         foreach (array_slice($lower, 0, 2) as $item) {
-            $yearMonth = (new DateTimeImmutable($month . '-01'))->modify('-1 year')->format('Y-m');
-            $yearDay = $current ? min($comparison['current_day'], (int) (new DateTimeImmutable($yearMonth . '-01'))->format('t')) : 31;
-            $yearPeriod = isset($history[$yearMonth]) ? spending_through_day($history[$yearMonth], $yearDay) : null;
-            $window = $current ? (new DateTimeImmutable($month . '-01'))->format('M') . ' 1–' . $comparison['current_day'] . ' vs ' . (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ' 1–' . $comparison['previous_day'] : month_label($comparison['previous_month']);
-            $rows[] = ['visual' => 'comparison', 'name' => $item['name'], 'current_cents' => $item['current'], 'previous_cents' => $item['previous'], 'change_cents' => $item['delta'], 'current_label' => (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : ''), 'previous_label' => (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : ''),
-                'current_period' => (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : '') . ' ' . substr($month, 0, 4),
-                'previous_period' => (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : '') . ' ' . substr($comparison['previous_month'], 0, 4),
-                'year_ago_cents' => $yearPeriod !== null ? ($yearPeriod['categories'][$item['id']]['amount'] ?? 0) : null,
-                'year_ago_period' => (new DateTimeImmutable($yearMonth . '-01'))->format('M') . ($current ? ' 1–' . $yearDay : '') . ' ' . substr($yearMonth, 0, 4),
-                'partial' => $current, 'kind' => 'positive', 'label' => 'Spending eased', 'title' => $item['name'] . ' spending is ' . insight_amount(-$item['delta']) . ' lower',
-                'detail' => 'Recorded purchases: ' . $window . '. ' . ($current ? 'A lighter start; the month is still in progress.' : 'A lower total, based on the transactions recorded.'),
-                'url' => $url . '&category=' . $item['id'] . '#category-' . $item['id']];
+            $rows[] = insight_comparison_row($item, $comparison, $history, $url . '&category=' . $item['id'] . '#category-' . $item['id']);
         }
     }
     // Show one of each useful type first, then up to two additional strong signals.
@@ -87,6 +80,51 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
     }
     $rows = array_slice([...array_values($primary), ...$extra], 0, 5);
     return ['month' => $month, 'caption' => $caption, 'rows' => $rows];
+}
+
+/** Shared date windows and bar facts for category and whole-month comparisons. */
+function insight_comparison_row(array $item, array $comparison, array $history, string $url, bool $total = false): array
+{
+    $month = $comparison['month']; $current = $comparison['partial'];
+    $yearMonth = (new DateTimeImmutable($month . '-01'))->modify('-1 year')->format('Y-m');
+    $yearDay = $current ? min($comparison['current_day'], (int) (new DateTimeImmutable($yearMonth . '-01'))->format('t')) : 31;
+    $yearPeriod = isset($history[$yearMonth]) ? spending_through_day($history[$yearMonth], $yearDay) : null;
+    $currentLabel = (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : '');
+    $previousLabel = (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : '');
+    $direction = $item['delta'] > 0 ? 'higher' : ($item['delta'] < 0 ? 'lower' : 'unchanged');
+    $title = $item['name'] . ($item['delta'] === 0 ? ': same spending total' : ' spending is ' . insight_amount(abs($item['delta'])) . ' ' . $direction);
+    return ['visual' => 'comparison', 'name' => $item['name'], 'current_cents' => $item['current'], 'previous_cents' => $item['previous'], 'change_cents' => $item['delta'],
+        'current_label' => $currentLabel, 'previous_label' => $previousLabel,
+        'current_period' => $currentLabel . ' ' . substr($month, 0, 4), 'previous_period' => $previousLabel . ' ' . substr($comparison['previous_month'], 0, 4),
+        'year_ago_cents' => $yearPeriod !== null ? ($total ? $yearPeriod['expenses'] : ($yearPeriod['categories'][$item['id']]['amount'] ?? 0)) : null,
+        'year_ago_period' => (new DateTimeImmutable($yearMonth . '-01'))->format('M') . ($current ? ' 1–' . $yearDay : '') . ' ' . substr($yearMonth, 0, 4),
+        'partial' => $current, 'kind' => $total ? 'total' : ($item['delta'] > 0 ? 'increase' : 'positive'), 'label' => $total ? 'Month over month' : ($item['delta'] > 0 ? 'Spending rose' : 'Spending eased'),
+        'title' => $title, 'detail' => 'Recorded purchases: ' . $currentLabel . ' vs ' . $previousLabel . '. ' . ($current ? 'The month is still in progress.' : 'Based on the transactions recorded.'), 'url' => $url];
+}
+
+/** Selected-month cards use actual amounts; no model requests or filler insights. */
+function monthly_insights(PDO $db, int $user, array $history, string $month, int $account = 0, ?string $today = null): array
+{
+    $today ??= (new DateTimeImmutable('now', new DateTimeZone('America/New_York')))->format('Y-m-d');
+    $result = overview_insights($db, $user, $history, $today, $month, $account);
+    if ($result['month'] === null) { return $result; }
+    $comparison = spending_comparison($history, $month, $today);
+    if (!$comparison['available'] || max($comparison['current']['expenses'], $comparison['previous']['expenses']) === 0) { return $result; }
+    $url = '/?page=analyzer&month=' . $month . ($account > 0 ? '&account=' . $account : '');
+    $total = insight_comparison_row(['name' => 'Month over month', 'current' => $comparison['current']['expenses'], 'previous' => $comparison['previous']['expenses'], 'delta' => $comparison['total']['delta']], $comparison, $history, $url . '&compare=1#month-comparison', true);
+    $drivers = $comparison['categories'];
+    usort($drivers, fn($a, $b) => abs($b['delta']) <=> abs($a['delta']));
+    $total['drivers'] = array_slice(array_values(array_filter($drivers, fn($c) => abs($c['delta']) >= 2500)), 0, 2);
+    // Prioritize distinct signals; don't duplicate a category already called out by its budget.
+    $usedNames = array_column($result['rows'], 'name');
+    $increases = array_filter($comparison['categories'], fn($c) => !in_array($c['name'], $usedNames, true) && $c['delta'] >= 2500 && ($c['percent'] === null || $c['percent'] >= 20));
+    usort($increases, fn($a, $b) => $b['delta'] <=> $a['delta']);
+    $additional = [];
+    foreach (array_slice($increases, 0, 1) as $item) { $additional[] = insight_comparison_row($item, $comparison, $history, $url . '&category=' . $item['id'] . '#category-' . $item['id']); }
+    // A budget warning, merchant pattern and useful positive take precedence over extra signals.
+    $result['rows'] = array_slice([$total, ...array_slice($result['rows'], 0, 3), ...$additional, ...array_slice($result['rows'], 3)], 0, 6);
+    $result['monthly'] = true;
+    return $result;
 }
 
 /** Short visual labels; approximation is explicit without a sentence. */
@@ -101,10 +139,11 @@ function insight_explanation(array $row, string $month): string
 {
     $period = month_label($month);
     if ($row['visual'] === 'comparison') {
-        $text = $row['name'] . ': ' . insight_amount(abs($row['change_cents'])) . " less spent.\n"
+        $text = ($row['change_cents'] === 0 ? $row['name'] . ': same spending total.' : $row['name'] . ': ' . insight_amount(abs($row['change_cents'])) . ($row['change_cents'] > 0 ? ' more spent.' : ' less spent.')) . "\n"
             . $row['current_period'] . ': ' . insight_amount($row['current_cents']) . " (dark bar)\n"
             . $row['previous_period'] . ': ' . insight_amount($row['previous_cents']) . ' (light bar)';
         if ($row['year_ago_cents'] !== null) { $text .= "\nSame period last year — " . $row['year_ago_period'] . ': ' . insight_amount($row['year_ago_cents']); }
+        foreach ($row['drivers'] ?? [] as $driver) { $text .= "\n" . $driver['name'] . ': ' . insight_amount(abs($driver['delta'])) . ($driver['delta'] > 0 ? ' more' : ' less') . ' than the previous month.'; }
         return $text . ($row['partial'] ? "\nThe month is still in progress." : '');
     }
     if ($row['visual'] === 'budget') {

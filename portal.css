@@ -42,6 +42,24 @@
 .report-filter > div { min-width: 190px; }
 .report-filter label { margin-top: 0; }
 .filter-caption { margin-left: auto; align-self: center; font-size: .8125rem; color: #56657b; }
+.analyzer-heading { align-items: center; margin-bottom: 20px; gap: 28px; }
+.analyzer-heading h1 { margin: 0; flex: 1 1 auto; font-size: clamp(1.9rem, 3.3vw, 2.6rem); }
+.analyzer-heading .report-filter { flex: 0 1 auto; margin: 0; gap: 12px; flex-wrap: nowrap; }
+.analyzer-heading .report-filter > div { min-width: 0; width: 175px; }
+.analyzer-heading .report-filter label { font-size: .78rem; margin-bottom: 6px; }
+.analyzer-heading .report-filter select { font-size: .9rem; padding: 8px 10px; }
+.analyzer-heading .report-filter button { white-space: nowrap; }
+.monthly-comparison-details > .comparison-panel { border: 0; margin: 0; padding: 8px 0 0; }
+@media (max-width: 1050px) {
+    .analyzer-heading { flex-wrap: wrap; gap: 16px; }
+    .analyzer-heading .report-filter { margin-left: auto; }
+}
+@media (max-width: 700px) {
+    .analyzer-heading { display: block; }
+    .analyzer-heading .report-filter { display: grid; grid-template-columns: 1fr 1fr; margin-top: 16px; gap: 10px; }
+    .analyzer-heading .report-filter > div { width: auto; }
+    .analyzer-heading .report-filter button { grid-column: 1 / -1; }
+}
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .stat { padding: 24px; background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; }
 .stat > span { display: block; color: #56657b; font-size: .875rem; }
@@ -519,6 +537,7 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .insight-frequency .insight-icon { background: #eeeaff; color: #7254b8; }
 .insight-fund .insight-icon { background: #dcf4ec; color: #128267; }
 .insight-comparison .insight-icon { background: #e5efff; color: #3d78b9; }
+.insight-increase .insight-icon { background: #fff0dc; color: #a65a12; }
 .insight-empty .insight-icon { background: #eef1f5; color: #5c7085; }
 .insight-over .insight-icon { background: #fce8e7; color: #b64048; }
 .insight-content { display: block; min-width: 0; }
@@ -534,6 +553,8 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .insight-over .meter-value { fill: #db5762; }
 .insight-fund .meter-value { fill: #38b38c; }
 .insight-comparison-bars { height: 12px; }
+.insight-increase .comparison-previous { fill: #f2d4a2; }
+.insight-increase .comparison-current { fill: #df9b36; }
 .comparison-previous { fill: #b9d2ee; }
 .comparison-current { fill: #558bd3; }
 @media (max-width: 700px) {

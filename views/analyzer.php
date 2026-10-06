@@ -1,13 +1,15 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
-<div class="page-heading analyzer-heading"><h1>Credit card analyzer</h1><span class="muted">Select a slice to explore.</span></div>
-<?php if ($pending): ?><p class="notice"><a href="/?page=imports">Finish reviewing your statement</a></p><?php endif; ?>
+<div class="page-heading analyzer-heading"><h1>Credit card analyzer</h1>
 <?php if ($report !== null && $months): ?>
 <form class="report-filter" method="get" action="/">
     <input type="hidden" name="page" value="analyzer">
     <div><label for="month">Report month</label><select id="month" name="month"><?php if (!in_array($month, $months, true)): ?><option value="<?= escape($month) ?>"><?= escape(month_label($month)) ?></option><?php endif; ?><?php foreach ($months as $option): ?><option value="<?= escape($option) ?>" <?= $option === $month ? 'selected' : '' ?>><?= escape(month_label($option)) ?></option><?php endforeach; ?></select></div>
     <div><label for="account-filter">Card</label><select id="account-filter" name="account"><option value="0">All cards</option><?php foreach ($accounts as $account): ?><option value="<?= (int) $account['id'] ?>" <?= (int) $account['id'] === $accountFilter ? 'selected' : '' ?>><?= escape($account['label']) ?></option><?php endforeach; ?></select></div>
-    <button type="submit" class="secondary">View report</button><span class="filter-caption">By transaction date · USD</span>
+    <button type="submit" class="secondary">View report</button>
 </form>
+<?php endif; ?></div>
+<?php if ($pending): ?><p class="notice"><a href="/?page=imports">Finish reviewing your statement</a></p><?php endif; ?>
+<?php if ($report !== null && $months): ?>
 <section class="panel category-panel analyzer-hero" aria-labelledby="category-heading" id="spending-chart">
     <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?><?= $month === gmdate('Y-m') ? ' · SO FAR' : '' ?></div><h2 id="category-heading">Where your money went</h2></div><span class="pill"><?= $report['purchase_count'] ?> purchases</span></div>
     <?php if ($report['expenses'] > 0):
@@ -19,8 +21,8 @@
     <div class="chart-footer"><span>Refunds &amp; credits <strong class="change-down"><?= money($report['refunds']) ?></strong></span><span>Net spending <strong><?= money($report['net']) ?></strong></span><a href="<?= escape(analyzer_url($month, $accountFilter) . '&audit=all#audit-heading') ?>">Browse categories</a></div>
 </section>
 <?php require __DIR__ . '/monthly-review.php'; ?>
+<?php require __DIR__ . '/overview-insights.php'; ?>
 <?php if ($report['ai_pending_count']): ?><p class="subtle-status">Categorizing <?= $report['ai_pending_count'] ?> merchants… <a href="<?= escape(analyzer_url($month, $accountFilter)) ?>">Refresh report</a><span class="sr-only">Automatic categorization is in progress.</span></p><?php endif; ?>
-<?php require __DIR__ . '/budget-progress.php'; ?>
 <?php require __DIR__ . '/category-audit.php'; ?>
 <details class="panel compact-disclosure" id="merchant-totals"><summary>Merchant totals <span class="muted"><?= count($report['merchants']) ?> merchants</span></summary>
     <?php if ($report['merchants']): ?><div class="table-scroll"><table class="merchant-table"><thead><tr><th>Merchant</th><th>Category</th><th class="number">Purchases</th><th class="number">Credits</th><th class="number">Net spending</th><th><span class="sr-only">Edit and transaction details</span></th></tr></thead><tbody>
@@ -31,8 +33,9 @@
     <?php else: ?><p class="empty-inline">No merchants to show for this month.</p><?php endif; ?>
 </details>
 
+<details class="panel compact-disclosure monthly-comparison-details" id="month-comparison" <?= ($_GET['compare'] ?? '') === '1' ? 'open' : '' ?>><summary>Month comparison <span class="muted">Exact figures</span></summary><?php require __DIR__ . '/month-comparison.php'; ?></details>
+<?php require __DIR__ . '/budget-progress.php'; ?>
 <?php if ($report['payment_rows']): ?><details class="panel payments"><summary>Card payments · <?= money($report['payments']) ?> excluded from spending</summary><div class="table-scroll"><table><thead><tr><th>Date</th><th>Card</th><th class="number">Payment</th></tr></thead><tbody><?php foreach ($report['payment_rows'] as $payment): ?><tr><td><?= escape($payment['transaction_date']) ?></td><td><?= escape($payment['account']) ?></td><td class="number"><?= money((int) $payment['amount_cents']) ?></td></tr><?php endforeach; ?></tbody></table></div></details><?php endif; ?>
-<?php require __DIR__ . '/month-comparison.php'; ?>
 <?php elseif ($report !== null): ?>
 <?php require __DIR__ . '/budget-progress.php'; ?>
 <section class="empty-state"><h2>Your first monthly report is one upload away.</h2><p>Add a statement or connect your card.</p><a class="button" href="/?page=imports">Upload a statement</a></section>

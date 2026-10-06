@@ -69,6 +69,24 @@ for ($i = 0; $i < 8; $i++) { $more .= "2025-04-05,BOOK SHOP,-10\n"; }
 save_import($db, 50, pending_csv($more, $card));
 $expanded = overview_insights($db, 50, spending_history($db, 50), '2025-04-06');
 check(count($expanded['rows']) === 5 && count(array_filter($expanded['rows'], fn($r) => $r['kind'] === 'pattern')) === 2, 'additional meaningful signals can fill up to five slots');
+$monthly = monthly_insights($db, 50, spending_history($db, 50), '2025-04', 0, '2025-04-06');
+check(count($monthly['rows']) === 6 && $monthly['rows'][0]['name'] === 'Month over month', 'monthly insights put the total comparison first and cap useful cards at six');
+check($monthly['rows'][0]['current_cents'] === 104000 && $monthly['rows'][0]['previous_cents'] === 70000 && str_contains(insight_explanation($monthly['rows'][0], '2025-04'), 'more spent'), 'month comparison uses actual purchase totals and correctly describes increases');
+check(str_contains($monthly['rows'][0]['url'], '&compare=1#month-comparison') && $monthly['rows'][0]['drivers'][0]['name'] === 'Groceries', 'total insight opens exact details and explains the biggest category changes');
+$older = monthly_insights($db, 50, spending_history($db, 50), '2025-03', 0, '2025-05-06');
+check($older['month'] === '2025-03' && !str_contains(json_encode($older), 'Tatte'), 'selecting an earlier month cannot surface the latest month’s merchant patterns');
+check(monthly_insights($db, 50, spending_history($db, 50), '2025-06', 0, '2025-05-06')['rows'] === [] && monthly_insights($db, 50, spending_history($db, 50), '2025-02', 0, '2025-05-06')['rows'] === [], 'future and missing selected months never fall back to latest-month insights');
+$noBaseline = monthly_insights($db, 50, ['2025-04' => $history['2025-04']], '2025-04', 0, '2025-04-06');
+check(!in_array('Month over month', array_column($noBaseline['rows'], 'name'), true), 'missing prior-month history does not become a zero baseline');
+save_import($db, 50, pending_csv("Date,Name,Amount\n2025-03-01,COSTCO,-25\n2025-04-02,COSTCO,-100\n", 0, 'Separate card'));
+$separate = (int) analyzer_query($db, "SELECT id FROM analyzer_accounts WHERE user_id = 50 AND label = 'Separate card'")->fetchColumn();
+$filtered = monthly_insights($db, 50, spending_history($db, 50, $separate), '2025-04', $separate, '2025-04-06');
+check($filtered['rows'][0]['current_cents'] === 10000 && $filtered['rows'][0]['previous_cents'] === 2500 && !array_filter($filtered['rows'], fn($r) => in_array($r['visual'], ['budget', 'fund', 'frequency'], true)), 'card filter scopes amounts and merchants without applying whole-budget targets to one of multiple cards');
+check(count($filtered['rows']) === 2 && $filtered['rows'][1]['name'] === 'Groceries' && str_contains($filtered['rows'][1]['url'], '&account=' . $separate), 'meaningful category increases appear with card-specific drill-down links');
+check(monthly_insights($db, 51, spending_history($db, 51), '2025-04', 0, '2025-04-06')['rows'] === [], 'monthly cards stay private and suppress routine spending');
+$overviewInsights = $monthly;
+ob_start(); require dirname(__DIR__) . '/views/overview-insights.php'; $monthlyHtml = ob_get_clean();
+check(str_contains($monthlyHtml, 'Explain Month over month') && str_contains($monthlyHtml, 'insight-increase') && str_contains($monthlyHtml, 'more spent'), 'monthly graphics and explanation buttons support upward comparisons');
 echo "All overview insight checks passed.\n";
 
 if (getenv('DAN_INSIGHTS_PREVIEW')) {

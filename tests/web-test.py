@@ -202,6 +202,12 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check(status == 200 and '5 transactions saved. 0 duplicates skipped.' in report, 'confirm saves import')
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
         check('No transactions have been imported for July 2026' in report, 'monthly comparison distinguishes missing prior data from zero')
+        heading = report[report.index('class="page-heading analyzer-heading"'):report.index('id="spending-chart"')]
+        check('Report month' in heading and 'View report' in heading and 'Select a slice' not in heading and 'By transaction date' not in heading, 'analyzer header contains compact report controls without helper captions')
+        check(report.index('id="merchant-totals"') < report.index('id="month-comparison"') < report.index('id="budget-progress"') < report.index('class="panel payments"'), 'merchant totals stay above detailed comparison, budget and card payments')
+        check('id="month-comparison" open' not in report, 'exact monthly comparison stays collapsed by default')
+        _, expanded_compare, _ = request('/?page=analyzer&month=2026-08&compare=1')
+        check('id="month-comparison" open' in expanded_compare, 'comparison detail link opens its native disclosure')
         status, overview, _ = request('/')
         check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Category shifts' not in overview and 'No standout patterns yet' not in overview, 'overview removes the old graphic without showing filler insights')
         check('Automatic categorization is in progress.' in report and 'Curious Shop' in report, 'unknown merchant is queued without prompting for a category')
