@@ -8,12 +8,13 @@ require __DIR__ . '/monthly-reviews.php';
 require __DIR__ . '/budgets.php';
 require __DIR__ . '/budget-recommendations.php';
 require __DIR__ . '/overview-insights.php';
+require __DIR__ . '/uncategorized.php';
 require __DIR__ . '/admin.php';
 require __DIR__ . '/statements.php';
 
 $userId = (int) $_SESSION['user']['id'];
 $displayName = ucfirst($_SESSION['user']['username']);
-$page = in_array($_GET['page'] ?? '', ['analyzer', 'budget', 'statements', 'connect', 'admin', 'setup', 'imports'], true) ? $_GET['page'] : 'home';
+$page = in_array($_GET['page'] ?? '', ['analyzer', 'budget', 'statements', 'connect', 'admin', 'setup', 'imports', 'uncategorized'], true) ? $_GET['page'] : 'home';
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $error = null;
@@ -42,13 +43,14 @@ function redirect_analyzer(string $month = '', int $account = 0): never
     header('Location: ' . analyzer_url($month, $account), true, 303); exit;
 }
 
+if ($page === 'uncategorized') { require __DIR__ . '/uncategorized-controller.php'; }
 if ($page === 'budget') { require __DIR__ . '/budget-controller.php'; }
 if ($page === 'admin') { require __DIR__ . '/admin-controller.php'; }
 if ($page === 'connect') { require __DIR__ . '/simplefin-controller.php'; }
 
 try {
     $db = in_array($page, ['analyzer', 'imports', 'statements'], true) ? database() : null;
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin', 'budget'], true)) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($page, ['connect', 'admin', 'budget', 'uncategorized'], true)) {
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ANALYZER_MAX_BYTES + 65536) { throw new InvalidArgumentException('The upload is too large. Choose a CSV smaller than 2 MB.'); }
         if (!hash_equals($_SESSION['csrf'], input('csrf'))) {
             http_response_code(403); throw new InvalidArgumentException('Your form expired. Please try again.');
@@ -191,7 +193,7 @@ if ($page === 'home') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'imports' => 'Imports & monthly reviews', 'setup' => 'Admin / Setup', 'budget' => 'Monthly budget', default => 'Credit card analyzer' }) ?> · KLE Coin</title>
+    <title><?= escape(match ($page) { 'home' => $displayName . '’s portal', 'admin' => 'User administration', 'connect' => 'Connect your card', 'statements' => 'Statements', 'imports' => 'Imports & monthly reviews', 'setup' => 'Admin / Setup', 'budget' => 'Monthly budget', 'uncategorized' => 'Uncategorized expenses', default => 'Credit card analyzer' }) ?> · KLE Coin</title>
     <?php require __DIR__ . "/views/brand-head.php"; ?>
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
     <link rel="stylesheet" href="/portal.css?v=<?= substr(hash_file('sha256', __DIR__ . '/portal.css'), 0, 16) ?>">
@@ -202,14 +204,14 @@ if ($page === 'home') {
 <body class="workspace">
 <header class="topbar">
     <?php require __DIR__ . "/views/brand.php"; ?>
-    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=setup" <?= in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin'], true) ? 'aria-current="page"' : '' ?>>Admin / Setup</a></nav>
+    <nav aria-label="Main navigation"><a href="/" <?= $page === 'home' ? 'aria-current="page"' : '' ?>>Overview</a><a href="/?page=analyzer" <?= $page === 'analyzer' ? 'aria-current="page"' : '' ?>>Credit card analyzer</a><a href="/?page=statements" <?= $page === 'statements' ? 'aria-current="page"' : '' ?>>Statements</a><a href="/?page=setup" <?= in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin', 'uncategorized'], true) ? 'aria-current="page"' : '' ?>>Admin / Setup</a></nav>
     <div class="account-menu"><span class="avatar" aria-hidden="true"><?= escape(strtoupper(substr($displayName, 0, 1))) ?></span><span><?= escape($displayName) ?></span>
     <form method="post" action="/"><?php csrf_field(); ?><input type="hidden" name="action" value="logout"><button class="text-button" type="submit">Sign out</button></form></div>
 </header>
 <main class="workspace-main">
     <?php if ($notice): ?><div class="notice" role="status"><?= escape($notice) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="error" role="alert"><?= escape($error) ?></div><?php endif; ?>
-    <?php if (in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin'], true)) { require __DIR__ . '/views/setup-nav.php'; } ?>
+    <?php if (in_array($page, ['setup', 'imports', 'budget', 'connect', 'admin', 'uncategorized'], true)) { require __DIR__ . '/views/setup-nav.php'; } ?>
     <?php require __DIR__ . '/views/' . $page . '.php'; ?>
 </main>
 <footer><span class="footer-brand">KLE Coin · Plan. Spend. Save. Grow.</span> <span>Signed in as <?= escape($displayName) ?></span></footer>

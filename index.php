@@ -101,12 +101,11 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
     <link rel="stylesheet" href="/styles.css?v=<?= substr(hash_file('sha256', __DIR__ . '/styles.css'), 0, 16) ?>">
 </head>
 <body class="auth-page">
-<header class="brand"><?php require __DIR__ . "/views/brand.php"; ?><span class="brand-label">YOUR PRIVATE MONEY SPACE</span></header>
 <main class="auth-main">
     <section class="card" aria-labelledby="heading">
-        <div class="eyebrow"><?= $signedIn ? 'ALL SET' : ($setup ? 'FIRST TIME HERE' : 'ACCOUNT ACCESS') ?></div>
-        <h1 id="heading"><?= escape($title) ?></h1>
-        <p class="intro"><?= $signedIn ? 'Welcome, ' . escape($_SESSION['user']['username']) . '. Your account is ready.' : ($setup ? 'Choose a password to use whenever you sign in.' : 'Sign in to your account to continue.') ?></p>
+        <img class="auth-logo" src="/assets/kle-coin-logo-v2.png" alt="KLE Coin — Plan. Spend. Save. Grow." width="1536" height="1024">
+        <h1 id="heading" class="<?= $setup ? 'auth-setup-heading' : 'sr-only' ?>"><?= escape($title) ?></h1>
+        <p class="intro auth-copy"><?= $setup ? 'Choose a password and make yourself at home.' : 'Your money. Your next move.' ?></p>
         <?php if ($error !== null): ?><p class="error" role="alert"><?= escape($error) ?></p><?php endif; ?>
         <?php if ($signedIn): ?>
             <form method="post" action="/">
@@ -137,6 +136,5 @@ $title = $signedIn ? 'You’re signed in' : ($setup ? 'Create your password' : '
         <?php endif; ?>
     </section>
 </main>
-<footer>KLE Coin · Your money. Your progress.</footer>
 </body>
 </html>

@@ -152,6 +152,12 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         else:
             raise RuntimeError('PHP server did not start')
         check(status == 200 and 'Welcome back' in login, 'login page renders')
+        check('class="auth-logo"' in login and '<header' not in login and 'Your money. Your next move.' in login, 'login centers the original stacked logo without a page header')
+        if os.environ.get('DAN_PREVIEW_DIR'):
+            destination = Path(os.environ['DAN_PREVIEW_DIR'])
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / 'login.html').write_text(login)
+            shutil.copytree(ROOT / 'assets', destination / 'assets', dirs_exist_ok=True)
         status, portal, _ = request('/', {'csrf': token(login), 'username': 'first_test_user', 'password': 'test-only-passphrase'})
         check(status == 200 and 'Welcome back, First_test_user.' in portal and 'Open analyzer' in portal, 'login opens personalized portal')
         for asset in ['styles.css', 'portal.css', 'charts.js']:
@@ -197,7 +203,7 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
         check('No transactions have been imported for July 2026' in report, 'monthly comparison distinguishes missing prior data from zero')
         status, overview, _ = request('/')
-        check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Worth a look' in overview and 'Category shifts' not in overview, 'overview replaces category shifts with compact linked insights')
+        check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Category shifts' not in overview and 'No standout patterns yet' not in overview, 'overview removes the old graphic without showing filler insights')
         check('Automatic categorization is in progress.' in report and 'Curious Shop' in report, 'unknown merchant is queued without prompting for a category')
         check('id="audit-heading"' not in report and 'name="statement"' not in report, 'analyzer hides category audit and keeps upload on its own page')
         check('<details class="panel compact-disclosure" id="merchant-totals">' in report and 'Recent imports' not in report and '<details class="panel import-history compact-disclosure">' in request('/?page=imports')[1], 'merchant totals stay collapsed and recent imports move to setup')
@@ -353,6 +359,20 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
             harris = next(node for key, node in sample_audit.items() if key.startswith('merchant-') and 'HARRIS TEETER' in node['text'])
             check(costco['parent'] == harris['parent'] and 'Groceries' in sample_audit[costco['parent']]['text']
                   and 'COSTCO GAS' not in sample_audit[costco['parent']]['text'], 'sample Groceries audit groups Costco and Harris Teeter separately from fuel')
+        # Add a separate unknown merchant across two months to verify the cleanup flow.
+        unknown_csv = b'Date,Name,Amount\n2025-01-02,ODD LITTLE SHOP,-12\n2026-08-02,ODD LITTLE SHOP,-18\n'
+        _, unknown_preview, _ = request('/?page=analyzer', dict(upload, account_id=1), unknown_csv)
+        request('/?page=analyzer', {'csrf': csrf, 'action': 'confirm_import', 'pending_token': token(unknown_preview, 'pending_token')})
+        status, unsorted, _ = request('/?page=uncategorized')
+        check(status == 200 and 'Uncategorized expenses' in unsorted and '2025-01-02' in unsorted and '2026-08-02' in unsorted, 'uncategorized screen shows purchases from all months')
+        cleanup_id = next(item[0] for item in re.findall(r'<article class="uncategorized-merchant" id="uncategorized-(\d+)">.*?<h3>([^<]+)</h3>', unsorted, re.S) if item[1].upper() == 'ODD LITTLE SHOP')
+        cleanup_fields = {'csrf': csrf, 'action': 'categorize_uncategorized', 'merchant_id': cleanup_id, 'category_id': '0', 'custom_category': 'Independent stores'}
+        check(request('/?page=uncategorized', dict(cleanup_fields, csrf='wrong'))[0] == 403, 'uncategorized updates require CSRF')
+        if os.environ.get('DAN_PREVIEW_DIR'):
+            (Path(os.environ['DAN_PREVIEW_DIR']) / 'uncategorized.html').write_text(unsorted)
+        status, sorted_page, _ = request('/?page=uncategorized', cleanup_fields)
+        check(status == 200 and 'Category saved for this merchant across all months' in sorted_page and ('id="uncategorized-' + cleanup_id + '"') not in sorted_page, 'category save removes the resolved merchant from cleanup')
+        check('Independent stores' in request('/?page=analyzer&month=2025-01')[1], 'cleanup categorization updates an earlier year’s report')
         status, admin_page, _ = request('/?page=admin')
         check(status == 200 and 'Add user &amp; generate code' in admin_page and '>Admin / Setup</a>' in portal and 'User management' in request('/?page=setup')[1], 'administrator sees user management and navigation')
         check(request('/?page=admin', {'csrf': 'wrong', 'action': 'create_user', 'username': 'blocked_user'})[0] == 403, 'CSRF blocks admin creation')
@@ -393,6 +413,7 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
         status, other_user, _ = request('/?page=analyzer&month=2026-08&account=1')
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
         check('value="125.50"' not in request('/?page=budget&month=2026-09')[1], 'second user cannot see the first user’s budget targets')
+        check('ODD LITTLE SHOP' not in request('/?page=uncategorized')[1], 'cleanup cannot expose another user’s purchase details')
         other_budget = request('/?page=budget&month=' + current_month)[1]
         check('value="200.00"' not in other_budget and 'Still available' not in other_budget and 'Planning baseline</th>' not in other_budget, 'cash inputs, recommendations and travel balances remain private')
         check('$50.00' not in request('/?page=statements&month=2026-08')[1], 'statement rows and totals remain private to their owner')

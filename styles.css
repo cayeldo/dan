@@ -30,12 +30,19 @@ footer { padding: 24px; color: #56657b; text-align: center; font-size: .8125rem;
 .brand-link img { position: absolute; display: block; height: auto; max-width: none; }
 .brand-coin img { width: 216.338%; left: -57.7465%; top: -10.6557%; }
 .brand-wordmark img { width: 138.3784%; left: -18.9189%; top: -266.6667%; }
-.auth-page { background: #f3f7f5; }
-.auth-page .brand { flex-direction: column; justify-content: center; gap: 12px; padding: 20px 24px; background: #fff; border-bottom: 1px solid #e0e6ef; }
-.auth-page .brand-label { border: 0; padding: 0; font-size: .6875rem; }
-.auth-main { width: min(508px, 100%); margin: 0 auto; padding: 32px 24px; }
-.auth-main .card { max-width: none; }
-@media (max-width: 700px) {
-    .auth-page .brand { padding: 12px 24px 18px; }
-    .auth-main { padding-top: 24px; }
+.auth-page { background: radial-gradient(ellipse at 15% 10%, #e8f8df 0, transparent 45%), radial-gradient(ellipse at 90% 90%, #dbf4ee 0, transparent 45%), #f5f8f6; }
+.auth-main { width: min(500px, 100%); margin: 0 auto; padding: 26px 20px; }
+.auth-main .card { max-width: none; padding: 20px 38px 30px; border-radius: 24px; }
+.auth-logo { display: block; width: 100%; max-width: 360px; height: auto; margin: 0 auto; }
+.auth-copy { text-align: center; margin: 0 0 24px; font-size: 1rem; color: #47635d; }
+.auth-setup-heading { text-align: center; font-size: 1.3rem; margin: 4px 0 10px; }
+.auth-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.auth-main label { margin-top: 18px; }
+.auth-main button { border-radius: 12px; margin-top: 24px; }
+.auth-main .switch { margin-top: 22px; padding-top: 18px; }
+@media (max-width: 480px) {
+    .auth-main { padding: 18px 16px; }
+    .auth-main .card { padding: 16px 24px 26px; }
+    .auth-logo { max-width: 300px; }
+    .auth-copy { font-size: .95rem; margin-bottom: 20px; }
 }

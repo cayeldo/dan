@@ -48,11 +48,22 @@ $dashboard = spending_dashboard($history);
 ob_start(); require dirname(__DIR__) . '/views/overview-insights.php'; $html = ob_get_clean();
 check(str_contains($html, 'Worth a look') && !str_contains($html, 'Category shifts'), 'compact rows replace the old category-shift graphic');
 check(str_contains($html, '&lt;script&gt;bad()&lt;/script&gt;') && !str_contains($html, '<script>bad()</script>'), 'merchant names are safely escaped in overview rows');
+check(str_contains($html, 'class="insight-meter"') && str_contains($html, '18×'), 'budget meter and prominent merchant count render without long prose');
+check(str_contains($html, 'comparison-bars') && !str_contains($html, 'insight-detail'), 'comparison uses labeled bars instead of explanatory paragraphs');
+check(!array_filter(overview_insights($db, 50, $history, '2025-04-30')['rows'], fn($r) => $r['kind'] === 'attention'), 'a nearly used target at month end is not presented as an early warning');
+save_import($db, 51, pending_csv("Date,Name,Amount\n2025-04-01,SMALL SHOP,-5\n"));
+check(overview_insights($db, 51, spending_history($db, 51), '2025-04-06')['rows'] === [], 'routine spending without a strong signal produces no filler panel');
+$more = "Date,Name,Amount\n";
+for ($i = 0; $i < 8; $i++) { $more .= "2025-04-05,BOOK SHOP,-10\n"; }
+save_import($db, 50, pending_csv($more, $card));
+$expanded = overview_insights($db, 50, spending_history($db, 50), '2025-04-06');
+check(count($expanded['rows']) === 5 && count(array_filter($expanded['rows'], fn($r) => $r['kind'] === 'pattern')) === 2, 'additional meaningful signals can fill up to five slots');
 echo "All overview insight checks passed.\n";
 
 if (getenv('DAN_INSIGHTS_PREVIEW')) {
     $overviewInsights = $funded;
     $overviewInsights['rows'][1]['title'] = '18 purchases at Tatte Bakery';
+    $overviewInsights['rows'][1]['name'] = 'Tatte Bakery';
     ob_start(); require dirname(__DIR__) . '/views/overview-insights.php'; $preview = ob_get_clean();
     file_put_contents(getenv('DAN_INSIGHTS_PREVIEW'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/portal.css"></head><body class="portal"><main class="workspace-main">' . $preview . '</main></body></html>');
 }
