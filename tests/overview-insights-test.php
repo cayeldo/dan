@@ -20,11 +20,21 @@ check(count($result['rows']) === 3 && array_column($result['rows'], 'kind') === 
 check($result['rows'][0]['title'] === 'Groceries: getting tight' && str_contains($result['rows'][0]['detail'], '$30 left'), 'near-budget category shows the actual amount left');
 check(str_contains($result['rows'][1]['title'], '18 purchases at Tatte') && str_contains($result['rows'][1]['detail'], '$90') && str_contains($result['rows'][1]['url'], '&merchant=' . $tatte), 'frequent merchant count and gross total exclude refunds, payments and future purchases');
 check(str_contains($result['rows'][2]['title'], 'Food Delivery') && str_contains($result['rows'][2]['detail'], 'Apr 1–6 vs Mar 1–6'), 'positive comparisons name matched date windows and do not repeat the attention category');
+$yearHistory = $history; $yearHistory['2024-04'] = $history['2025-03'];
+$delivery = array_key_first($yearHistory['2024-04']['daily'][3]['categories']);
+$yearHistory['2024-04']['daily'][3]['categories'][$delivery]['amount'] = 12567;
+$yearHistory['2024-04']['daily'][20] = $yearHistory['2024-04']['daily'][3];
+$yearHistory['2024-04']['daily'][20]['categories'][$delivery]['amount'] = 90000;
+$yearRow = overview_insights($db, 50, $yearHistory, '2025-04-06')['rows'][2];
+check($yearRow['year_ago_cents'] === 12567 && str_contains(insight_explanation($yearRow, '2025-04'), 'Apr 1–6 2024: about $125'), 'year-ago tooltip uses rounded category totals for the matching days only');
+check(str_contains(insight_explanation($result['rows'][2], '2025-04'), 'Apr 1–6 2025: about $50 (dark bar)') && str_contains(insight_explanation($result['rows'][2], '2025-04'), 'Mar 1–6 2025: about $200 (light bar)'), 'tooltip labels both actual bar periods and their rounded totals');
 check(!str_contains(json_encode($result), 'FUTURE SHOP'), 'future-dated transactions do not become current insights');
 check(overview_insights($db, 51, spending_history($db, 51), '2025-04-06')['rows'] === [], 'a different user cannot see insight facts');
 check(insight_amount(234691) === 'about $2,350' && insight_amount(50) === 'less than $1', 'prose rounds larger amounts without misrepresenting small balances as zero');
 $historyNoPrior = ['2025-04' => $history['2025-04']];
 check(count(overview_insights($db, 50, $historyNoPrior, '2025-04-06')['rows']) === 2, 'missing prior history cannot produce an invented positive comparison');
+$noYear = $history; unset($noYear['2024-04']);
+check(!str_contains(insight_explanation(overview_insights($db, 50, $noYear, '2025-04-06')['rows'][2], '2025-04'), 'last year'), 'missing year-ago history is omitted rather than presented as zero');
 $futureOnly = ['2025-05' => $history['2025-04']];
 check(overview_insights($db, 50, $futureOnly, '2025-04-06')['rows'] === [], 'future months are not shown as current overview facts');
 // Include Travel in the saved plan, with $400 accumulated and a $100 contribution.
@@ -50,6 +60,7 @@ check(str_contains($html, 'Worth a look') && !str_contains($html, 'Category shif
 check(str_contains($html, '&lt;script&gt;bad()&lt;/script&gt;') && !str_contains($html, '<script>bad()</script>'), 'merchant names are safely escaped in overview rows');
 check(str_contains($html, 'class="insight-meter"') && str_contains($html, '18×'), 'budget meter and prominent merchant count render without long prose');
 check(str_contains($html, 'comparison-bars') && !str_contains($html, 'insight-detail'), 'comparison uses labeled bars instead of explanatory paragraphs');
+check(str_contains($html, 'aria-label="Explain Food Delivery"') && !preg_match('/<a[^>]*>[^<]*<button/s', $html), 'dedicated explanation control is separate from the details link');
 check(!array_filter(overview_insights($db, 50, $history, '2025-04-30')['rows'], fn($r) => $r['kind'] === 'attention'), 'a nearly used target at month end is not presented as an early warning');
 save_import($db, 51, pending_csv("Date,Name,Amount\n2025-04-01,SMALL SHOP,-5\n"));
 check(overview_insights($db, 51, spending_history($db, 51), '2025-04-06')['rows'] === [], 'routine spending without a strong signal produces no filler panel');
@@ -62,8 +73,9 @@ echo "All overview insight checks passed.\n";
 
 if (getenv('DAN_INSIGHTS_PREVIEW')) {
     $overviewInsights = $funded;
+    foreach ($overviewInsights['rows'] as &$previewRow) { if ($previewRow['visual'] === 'comparison') { $previewRow = $yearRow; } } unset($previewRow);
     $overviewInsights['rows'][1]['title'] = '18 purchases at Tatte Bakery';
     $overviewInsights['rows'][1]['name'] = 'Tatte Bakery';
     ob_start(); require dirname(__DIR__) . '/views/overview-insights.php'; $preview = ob_get_clean();
-    file_put_contents(getenv('DAN_INSIGHTS_PREVIEW'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/portal.css"></head><body class="portal"><main class="workspace-main">' . $preview . '</main></body></html>');
+    file_put_contents(getenv('DAN_INSIGHTS_PREVIEW'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/portal.css"></head><body class="workspace"><main class="workspace-main">' . $preview . '</main><script src="/charts.js"></script></body></html>');
 }

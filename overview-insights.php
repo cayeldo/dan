@@ -65,8 +65,16 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
         $lower = array_filter($comparison['categories'], fn($c) => !in_array($c['id'], $attentionIds, true) && !in_array($c['id'], $overIds, true) && $c['current'] > 0 && $c['delta'] <= -2500 && $c['percent'] !== null && $c['percent'] <= -20);
         usort($lower, fn($a, $b) => ($a['delta'] <=> $b['delta']) ?: ($a['id'] <=> $b['id']));
         foreach (array_slice($lower, 0, 2) as $item) {
+            $yearMonth = (new DateTimeImmutable($month . '-01'))->modify('-1 year')->format('Y-m');
+            $yearDay = $current ? min($comparison['current_day'], (int) (new DateTimeImmutable($yearMonth . '-01'))->format('t')) : 31;
+            $yearPeriod = isset($history[$yearMonth]) ? spending_through_day($history[$yearMonth], $yearDay) : null;
             $window = $current ? (new DateTimeImmutable($month . '-01'))->format('M') . ' 1–' . $comparison['current_day'] . ' vs ' . (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ' 1–' . $comparison['previous_day'] : month_label($comparison['previous_month']);
-            $rows[] = ['visual' => 'comparison', 'name' => $item['name'], 'current_cents' => $item['current'], 'previous_cents' => $item['previous'], 'change_cents' => $item['delta'], 'current_label' => (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : ''), 'previous_label' => (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : ''), 'kind' => 'positive', 'label' => 'Spending eased', 'title' => $item['name'] . ' spending is ' . insight_amount(-$item['delta']) . ' lower',
+            $rows[] = ['visual' => 'comparison', 'name' => $item['name'], 'current_cents' => $item['current'], 'previous_cents' => $item['previous'], 'change_cents' => $item['delta'], 'current_label' => (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : ''), 'previous_label' => (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : ''),
+                'current_period' => (new DateTimeImmutable($month . '-01'))->format('M') . ($current ? ' 1–' . $comparison['current_day'] : '') . ' ' . substr($month, 0, 4),
+                'previous_period' => (new DateTimeImmutable($comparison['previous_month'] . '-01'))->format('M') . ($current ? ' 1–' . $comparison['previous_day'] : '') . ' ' . substr($comparison['previous_month'], 0, 4),
+                'year_ago_cents' => $yearPeriod !== null ? ($yearPeriod['categories'][$item['id']]['amount'] ?? 0) : null,
+                'year_ago_period' => (new DateTimeImmutable($yearMonth . '-01'))->format('M') . ($current ? ' 1–' . $yearDay : '') . ' ' . substr($yearMonth, 0, 4),
+                'partial' => $current, 'kind' => 'positive', 'label' => 'Spending eased', 'title' => $item['name'] . ' spending is ' . insight_amount(-$item['delta']) . ' lower',
                 'detail' => 'Recorded purchases: ' . $window . '. ' . ($current ? 'A lighter start; the month is still in progress.' : 'A lower total, based on the transactions recorded.'),
                 'url' => $url . '&category=' . $item['id'] . '#category-' . $item['id']];
         }
@@ -86,4 +94,36 @@ function insight_figure(int $cents): string
 {
     $step = $cents >= 100000 ? 2500 : ($cents >= 10000 ? 500 : 100);
     return str_replace(['less than ', 'about '], ['< ', $cents % $step === 0 ? '' : '≈'], insight_amount($cents));
+}
+
+/** Optional detail stays off the compact card; every amount uses the same rounding. */
+function insight_explanation(array $row, string $month): string
+{
+    $period = month_label($month);
+    if ($row['visual'] === 'comparison') {
+        $text = $row['name'] . ': ' . insight_amount(abs($row['change_cents'])) . " less spent.\n"
+            . $row['current_period'] . ': ' . insight_amount($row['current_cents']) . " (dark bar)\n"
+            . $row['previous_period'] . ': ' . insight_amount($row['previous_cents']) . ' (light bar)';
+        if ($row['year_ago_cents'] !== null) { $text .= "\nSame period last year — " . $row['year_ago_period'] . ': ' . insight_amount($row['year_ago_cents']); }
+        return $text . ($row['partial'] ? "\nThe month is still in progress." : '');
+    }
+    if ($row['visual'] === 'budget') {
+        return $row['name'] . ' · ' . $period . "\nSpent: " . insight_amount($row['spent_cents'])
+            . "\nBudget: " . insight_amount($row['target_cents']) . "\n"
+            . ucfirst(insight_amount(abs($row['remaining_cents']))) . ($row['remaining_cents'] < 0 ? ' over budget.' : ' left in this category.')
+            . "\nThe bar shows how much of the budget you've used.";
+    }
+    if ($row['visual'] === 'frequency') {
+        return $row['count'] . ' purchases at ' . $row['name'] . ' during ' . $period . ".\nTotal: " . insight_amount($row['amount_cents'])
+            . "\nAverage purchase: " . insight_amount((int) round($row['amount_cents'] / $row['count']));
+    }
+    if ($row['visual'] === 'fund') {
+        $fund = $row['fund'];
+        return 'Travel fund · ' . $period . "\nCarried in: " . insight_amount($fund['opening_cents'])
+            . "\nThis month's contribution: " . insight_amount($fund['contribution_cents'])
+            . "\nTravel spending: " . insight_amount($fund['spent_cents'])
+            . "\nUsed to cover other overages: " . insight_amount($fund['reallocated_cents'])
+            . "\nAvailable: " . insight_amount($fund['available_cents']) . '. Only this remainder can carry forward.';
+    }
+    return $row['detail'];
 }

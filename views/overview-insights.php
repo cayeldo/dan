@@ -35,14 +35,15 @@
             'basket' => '<path d="M4 12h24l-3 15H7Z M10 12l5-8 M22 12l-5-8 M11 17v5 M16 17v5 M21 17v5"/>',
             'dining' => '<path d="M8 4v9m-4-9v6a4 4 0 0 0 8 0V4 M8 14v14 M24 4c-5 5-5 11 0 12V4Zm0 12v12"/>',
         ]; ?>
-        <li><a class="insight-row insight-<?= escape($visual) ?> <?= $visual === 'budget' && $left < 0 ? 'insight-over' : '' ?>" href="<?= escape($insight['url']) ?>" aria-label="<?= escape($insight['title'] . '. ' . $insight['detail'] . ' Open details.') ?>">
+        <li><div class="insight-row insight-<?= escape($visual) ?> <?= $visual === 'budget' && $left < 0 ? 'insight-over' : '' ?>">
+            <a class="insight-link" href="<?= escape($insight['url']) ?>" aria-label="<?= escape($insight['title'] . '. ' . $insight['detail'] . ' Open details.') ?>"></a>
             <span class="insight-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><?= $paths[$icon] ?></svg></span>
-            <span class="insight-content"><strong class="insight-name"><?= escape($insight['name']) ?></strong><span class="insight-support"><?= escape($support) ?></span>
+            <span class="insight-content"><span class="insight-title"><strong class="insight-name"><?= escape($insight['name']) ?></strong><button type="button" class="insight-info" data-tooltip-toggle data-tooltip="<?= escape(insight_explanation($insight, $overviewInsights['month'])) ?>" aria-label="<?= escape('Explain ' . $insight['name']) ?>"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="7.3"/><path d="M10 9v5"/><circle cx="10" cy="6.5" r=".6" fill="currentColor" stroke="none"/></svg></button></span><span class="insight-support"><?= escape($support) ?></span>
             <?php if ($bar !== null): ?><svg class="insight-meter" viewBox="0 0 300 6" preserveAspectRatio="none" aria-hidden="true"><rect width="300" height="6" rx="3" class="meter-track"/><rect width="<?= sprintf('%.2F', $bar * 3) ?>" height="6" rx="3" class="meter-value"/></svg><?php endif; ?>
             <?php if ($comparisonBar !== null): ?><svg class="insight-comparison-bars" viewBox="0 0 300 15" preserveAspectRatio="none" aria-hidden="true"><rect width="300" height="5" rx="2.5" class="comparison-previous"/><rect y="10" width="<?= sprintf('%.2F', $comparisonBar * 3) ?>" height="5" rx="2.5" class="comparison-current"/></svg><?php endif; ?>
             </span>
             <span class="insight-value"><strong><?= escape($metric) ?></strong><span><?= escape($metricLabel) ?></span></span>
-        </a></li>
+        </div></li>
     <?php endforeach; ?>
     </ul>
 </section>
