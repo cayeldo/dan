@@ -1,12 +1,11 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
 <?php if ($monthlyReview): ?>
 <section class="panel monthly-review" id="monthly-review" aria-labelledby="monthly-review-heading">
-    <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?> · AI REVIEW</div><h2 id="monthly-review-heading"><?= $monthlyReview['status'] === 'completed' ? escape($monthlyReview['result']['headline']) : 'Your monthly review' ?></h2></div><?php if (count($accounts) > 1): ?><span class="pill">All cards</span><?php endif; ?></div>
+    <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?> · KLE Coin’s Take</div><h2 id="monthly-review-heading"><?= $monthlyReview['status'] === 'completed' ? escape($monthlyReview['result']['headline']) : 'Your monthly take' ?></h2></div><?php if (count($accounts) > 1): ?><span class="pill">All cards</span><?php endif; ?></div>
     <?php if ($monthlyReview['status'] === 'completed'): $review = $monthlyReview['result']; ?>
     <?php if ($monthlyReview['stale']): ?><p class="notice">Your data, categories, or budget changed after this review was saved. This is the original review; it has not been regenerated.</p><?php endif; ?>
-    <p class="review-summary"><?= escape(month_review_teaser($review['summary'])) ?></p>
     <details class="review-disclosure" id="monthly-review-details">
-    <summary><span class="review-read-more">Read more</span><span class="review-read-less">Read less</span><span class="sr-only"> about <?= escape(month_label($month)) ?> spending</span></summary>
+    <summary><span class="review-teaser-text"><?= escape(month_review_teaser($review['summary'])) ?></span> <span class="review-toggle"><svg class="review-target" viewBox="0 0 28 28" width="22" height="22" aria-hidden="true"><circle cx="12" cy="16" r="10" fill="#ffe58a" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="16" r="2" fill="currentColor"/><path d="M25 3 12 16m0-5v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="review-read-more">Read now</span><span class="review-read-less">Read less</span><span class="sr-only"> about <?= escape(month_label($month)) ?> spending</span></span></summary>
     <?php if ($monthlyReview['coverage'] === 'imported_transactions_only'): ?><p class="hint">Based on transactions imported when this review was prepared; later imports may change the picture.</p><?php endif; ?>
     <?php if (!$monthlyReview['budget_included']): ?><p class="hint">This saved review did not include a budget. It is kept as originally generated; no new AI request is made.</p><?php endif; ?>
     <?php if (month_review_teaser($review['summary']) !== $review['summary']): ?><p class="review-summary"><?= escape($review['summary']) ?></p><?php endif; ?>

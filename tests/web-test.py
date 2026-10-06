@@ -231,7 +231,7 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         saved_review_page = request('/?page=analyzer&month=2026-08')[1]
         check('A good start &lt;script&gt;bad()&lt;/script&gt;' in saved_review_page and '<script>bad()</script>' not in saved_review_page, 'saved model output is escaped')
         review_details = AuditDetails(saved_review_page).nodes['monthly-review-details']
-        check(not review_details['open'] and 'Read more' in review_details['text'] and 'Read less' in review_details['text'], 'AI review starts collapsed with native accessible disclosure controls')
+        check(not review_details['open'] and 'Read now' in review_details['text'] and 'Read less' in review_details['text'], 'AI review starts collapsed with native accessible disclosure controls')
         check('Review dining costs.' in review_details['text'] and 'Plan one meal at home.' in review_details['text'], 'expanded review contains honest opportunities and next steps')
         check(saved_review_page.index('id="spending-chart"') < saved_review_page.index('id="monthly-review"') < saved_review_page.index('id="monthly-review-details"'), 'review preview follows the spending chart')
         check('A good start' in request('/?page=analyzer&month=2026-08')[1], 'repeat report views reuse the saved review')

@@ -29,7 +29,7 @@ $statementLogo = !empty($pdfMode) ? __DIR__ . '/../assets/kle-coin-logo-v2.png' 
     </div>
     <?php endif; ?>
     <?php if ($statement['review']): $statementReview = $statement['review']; $reviewResult = $statementReview['result']; ?>
-    <h2>Saved monthly review <span>All imported cards · AI-generated</span></h2>
+    <h2>KLE Coin’s Take <span>All imported cards · AI-generated</span></h2>
     <div class="statement-review"><h3><?= escape($reviewResult['headline']) ?></h3><p><?= escape($reviewResult['summary']) ?></p><p><strong>Bright spot.</strong> <?= escape($reviewResult['bright_spot']) ?></p><p><strong>Room to adjust.</strong> <?= escape($reviewResult['opportunity']) ?></p><h3>Try next month</h3><ul><?php foreach ($reviewResult['next_steps'] as $step): ?><li><?= escape($step) ?></li><?php endforeach; ?></ul><p class="statement-caption">Saved <?= escape(substr($statementReview['completed_at'], 0, 10)) ?>.<?= $statementReview['stale'] ? ' Data, categories, or budget changed after this review. This is the original saved analysis.' : '' ?><?= !$statementReview['budget_included'] ? ' This review did not include a budget.' : '' ?></p></div>
     <?php endif; ?>
     <div class="statement-disclaimer"><strong>KLE Coin spending statement</strong><p>A personal record of imported activity, not an issuer statement or payment notice. Calendar dates may differ from your card’s billing cycle. Consult your card issuer’s statement for balances, due dates, minimum payments, and complete account terms. Unconfirmed periods may be missing transactions.</p><p>klecoin.com · Plan | Spend | Save | Grow</p></div>

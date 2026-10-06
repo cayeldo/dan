@@ -10,7 +10,7 @@
     <div><span>All-time purchases</span><strong><?= money($dashboard['expenses']) ?></strong></div>
 </section>
 <?php if ($latestReview && !$latestReview['stale']): ?>
-<section class="panel monthly-review-teaser"><div><div class="eyebrow"><?= escape(month_label($latestReview['month'])) ?> · AI REVIEW</div><h2><?= escape($latestReview['result']['headline']) ?></h2><p class="hint"><?= escape($latestReview['result']['summary']) ?></p></div><a class="button secondary" href="<?= escape(analyzer_url($latestReview['month']) . '#monthly-review') ?>">Read review ↗</a></section>
+<section class="panel monthly-review-teaser"><div><div class="eyebrow"><?= escape(month_label($latestReview['month'])) ?> · KLE Coin’s Take</div><h2><?= escape($latestReview['result']['headline']) ?></h2><p class="hint"><?= escape(month_review_teaser($latestReview['result']['summary'])) ?></p></div><a class="button secondary" href="<?= escape(analyzer_url($latestReview['month']) . '#monthly-review') ?>">Read review ↗</a></section>
 <?php endif; ?>
 <div class="dashboard-grid">
 <section class="panel trend-panel" aria-labelledby="trend-heading">
