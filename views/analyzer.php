@@ -1,5 +1,5 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
-<div class="page-heading analyzer-heading"><h1>Credit card analyzer</h1>
+<div class="page-heading analyzer-heading report-heading"><h1>Credit card analyzer</h1>
 <?php if ($report !== null && $months): ?>
 <form class="report-filter" method="get" action="/">
     <input type="hidden" name="page" value="analyzer">
