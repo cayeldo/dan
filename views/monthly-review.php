@@ -1,7 +1,7 @@
 <?php if (!defined('DAN_PORTAL')) { http_response_code(403); exit; } ?>
 <?php if ($monthlyReview): ?>
 <section class="panel monthly-review" id="monthly-review" aria-labelledby="monthly-review-heading">
-    <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?> · AI REVIEW</div><h2 id="monthly-review-heading"><?= $monthlyReview['status'] === 'completed' ? escape($monthlyReview['result']['headline']) : 'Your monthly review' ?></h2></div><span class="pill">All imported cards</span></div>
+    <div class="section-heading"><div><div class="eyebrow"><?= escape(month_label($month)) ?> · AI REVIEW</div><h2 id="monthly-review-heading"><?= $monthlyReview['status'] === 'completed' ? escape($monthlyReview['result']['headline']) : 'Your monthly review' ?></h2></div><?php if (count($accounts) > 1): ?><span class="pill">All cards</span><?php endif; ?></div>
     <?php if ($monthlyReview['status'] === 'completed'): $review = $monthlyReview['result']; ?>
     <?php if ($monthlyReview['stale']): ?><p class="notice">Your data, categories, or budget changed after this review was saved. This is the original review; it has not been regenerated.</p><?php endif; ?>
     <p class="review-summary"><?= escape(month_review_teaser($review['summary'])) ?></p>

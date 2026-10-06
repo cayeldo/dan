@@ -118,7 +118,7 @@ check($autoInput['coverage'] === 'imported_transactions_only' && $autoInput['pur
 check(run_month_review($db, 15, fn() => $response, $config) === 1, 'the existing worker generates the scheduled snapshot');
 check(run_month_review($db, 15, fn() => throw new RuntimeException('duplicate_call'), $config) === 0, 'scheduled completed reviews are never generated twice');
 $scheduled = saved_month_review($db, 15, '2025-09');
-check($scheduled['coverage'] === 'imported_transactions_only' && !$scheduled['stale'] && (int) $scheduled['prompt_version'] === 3, 'saved automatic review retains coverage and prompt version');
+check($scheduled['coverage'] === 'imported_transactions_only' && !$scheduled['stale'] && (int) $scheduled['prompt_version'] === 4, 'saved automatic review retains coverage and prompt version');
 $autoCard = (int) user_accounts($db, 15)[0]['id'];
 save_import($db, 15, pending_csv("Date,Name,Amount\n9/25/25,COSTCO,-10\n", $autoCard));
 check(saved_month_review($db, 15, '2025-09')['stale'], 'late imports keep an automatic review visible with a changed-data notice');
