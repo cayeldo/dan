@@ -477,3 +477,32 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .setup-card > span { color: var(--brand); font-weight: 650; }
 .setup-card:hover { border-color: #3a9987; }
 @media (max-width: 700px) { .setup-grid { grid-template-columns: 1fr; } .setup-nav { gap: 4px; } .setup-nav a { padding: 9px 10px; } }
+
+.budget-recommendation { scroll-margin-top: 24px; }
+.budget-recommendation > p, .recommendation-take p, .recommendation-take li { line-height: 1.65; }
+.recommendation-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+.recommendation-inputs input, .recommendation-priority-row input { width: 100%; }
+.recommendation-priorities { margin: 20px 0; border: 1px solid #dbe3ef; border-radius: 10px; padding: 0 18px; }
+.recommendation-priorities > summary { padding-left: 0; }
+.recommendation-priority-row { display: grid; grid-template-columns: minmax(150px, 1fr) 150px 170px; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid #e6ebef; }
+.recommendation-result { margin-top: 28px; border-top: 1px solid #dbe3ef; padding-top: 24px; }
+.recommendation-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin: 0 0 22px; }
+.recommendation-metrics span { display: block; color: #56657b; font-size: .8rem; margin-bottom: 6px; }
+.recommendation-metrics strong { font-size: 1.45rem; }
+.recommendation-table small { display: block; max-width: 440px; margin-top: 5px; color: #56657b; font-size: .8rem; line-height: 1.5; font-weight: 400; }
+.recommendation-table td { vertical-align: top; }
+.recommendation-apply { display: flex; align-items: center; gap: 18px; margin-top: 20px; }
+.recommendation-take { margin-top: 22px; padding: 16px 18px; background: #f3f8f5; border-radius: 10px; }
+.recommendation-take > summary { padding-left: 0; }
+@media (max-width: 700px) {
+    .recommendation-inputs { grid-template-columns: 1fr; gap: 16px; }
+    .recommendation-priority-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .recommendation-priority-row > strong { grid-column: 1 / -1; }
+    .recommendation-metrics { grid-template-columns: 1fr 1fr; }
+    .recommendation-apply { align-items: flex-start; flex-direction: column; }
+    .recommendation-table { min-width: 660px; }
+}
+.travel-start-form { max-width: 700px; }
+.travel-start-form > input { max-width: 260px; }
+.travel-start-form .coverage-confirm { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; font-size: .9rem; line-height: 1.5; }
+.travel-start-form .coverage-confirm input { width: 20px; min-height: 20px; flex-shrink: 0; margin-top: 2px; }

@@ -257,11 +257,49 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         progress_page = request('/?page=analyzer&month=2026-09')[1]
         check('Your budget at a glance' in progress_page and 'What’s in Misc?' in progress_page and 'Spending pace' in progress_page, 'analyzer shows saved targets, grouped details, and calculated pace')
 
+        current_budget = request('/?page=budget&month=' + current_month)[1]
+        recommendation_fields = {'csrf': csrf, 'action': 'recommend_budget', 'budget_month': current_month,
+            'budget_version': token(current_budget, 'budget_version'), 'resources_version': token(current_budget, 'resources_version'),
+            'cash_available': '200', 'cash_reserve': '20', 'priorities[misc]': 'protect', 'minimums[misc]': ''}
+        check(request('/?page=budget', dict(recommendation_fields, csrf='wrong'))[0] == 403, 'recommendation inputs require CSRF')
+        status, recommended_page, _ = request('/?page=budget', recommendation_fields)
+        check(status == 200 and 'Recommendation ready to compare' in recommended_page and 'Apply recommended budget' in recommended_page, 'HTTP budget recommendation shows a usable comparison')
+        check('value="125.50"' in recommended_page, 'building a recommendation leaves the current targets intact')
+        (folder / 'budget-advice-fixture.php').write_text("""<?php
+require __DIR__ . '/test-database.php';
+require __DIR__ . '/analyzer.php';
+require __DIR__ . '/analytics.php';
+require __DIR__ . '/budgets.php';
+require __DIR__ . '/monthly-reviews.php';
+require __DIR__ . '/budget-recommendations.php';
+run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savings. <script>bad()</script>', 'categories' => ['misc' => 'Keep room for your mixed costs.'], 'next_steps' => ['Check the category details.', 'Set aside the remaining cash.']], ['enabled' => true, 'model' => 'local-test']);
+""")
+        subprocess.run(['php', str(folder / 'budget-advice-fixture.php')], check=True)
+        recommended_page = request('/?page=budget&month=' + current_month)[1]
+        check('Your plan has room for savings. &lt;script&gt;bad()&lt;/script&gt;' in recommended_page and '<script>bad()</script>' not in recommended_page, 'budget AI explanation is escaped and shows a short teaser')
+        check('Read now' in recommended_page and 'Keep room for your mixed costs.' in recommended_page, 'budget explanation expands to the full category reasoning')
+        apply_fields = {'csrf': csrf, 'action': 'apply_recommended_budget', 'budget_month': current_month,
+            'recommendation_version': token(recommended_page, 'recommendation_version')}
+        check(request('/?page=budget', dict(apply_fields, csrf='wrong'))[0] == 403, 'switching budgets requires CSRF')
+        status, applied_page, _ = request('/?page=budget', apply_fields)
+        check(status == 200 and 'Recommended budget applied' in applied_page and 'This recommendation was applied' in applied_page, 'one button applies the verified recommended budget')
+        check('no longer available' in request('/?page=budget', apply_fields)[1], 'HTTP apply action cannot be replayed')
+        travel_fields = {'csrf': csrf, 'action': 'start_travel_fund', 'budget_month': current_month,
+            'budget_version': token(applied_page, 'budget_version'), 'travel_opening': '300', 'travel_confirmed': '1'}
+        check(request('/?page=budget', dict(travel_fields, csrf='wrong'))[0] == 403, 'travel starting balances require CSRF')
+        check('Confirm the starting balance' in request('/?page=budget', dict(travel_fields, travel_confirmed=''))[1], 'opening savings require an explicit confirmation')
+        status, travel_page, _ = request('/?page=budget', travel_fields)
+        check(status == 200 and 'Travel rollover started' in travel_page and '$300.00' in travel_page and 'Travel target above' in travel_page, 'travel fund starts with an explicit opening balance and displays its rules')
+
         if os.environ.get('DAN_PREVIEW_DIR'):
             destination = Path(os.environ['DAN_PREVIEW_DIR'])
             (destination / 'review.html').write_text(saved_review_page)
             (destination / 'budget.html').write_text(budget_page)
             (destination / 'budget-saved.html').write_text(saved_budget)
+            (destination / 'recommended.html').write_text(recommended_page)
+            (destination / 'travel.html').write_text(travel_page)
+            for stylesheet in ROOT.glob('*.css'):
+                shutil.copy(stylesheet, destination)
             (destination / 'review-statements.html').write_text(request('/?page=imports&reviews=1')[1])
             for script in ROOT.glob('*.js'):
                 shutil.copy(script, destination)
@@ -355,6 +393,8 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         status, other_user, _ = request('/?page=analyzer&month=2026-08&account=1')
         check(status == 200 and 'first monthly report' in other_user and 'Red Robin' not in other_user, 'second authenticated user cannot see first user’s report')
         check('value="125.50"' not in request('/?page=budget&month=2026-09')[1], 'second user cannot see the first user’s budget targets')
+        other_budget = request('/?page=budget&month=' + current_month)[1]
+        check('value="200.00"' not in other_budget and 'Still available' not in other_budget and 'Planning baseline</th>' not in other_budget, 'cash inputs, recommendations and travel balances remain private')
         check('$50.00' not in request('/?page=statements&month=2026-08')[1], 'statement rows and totals remain private to their owner')
         check(request('/?page=statements&month=2026-08&account=999999&download=pdf')[0] == 403, 'foreign card PDF requests are rejected')
         status, other_connect, _ = request('/?page=connect')

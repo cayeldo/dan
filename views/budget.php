@@ -40,5 +40,7 @@
         <div class="budget-actions"><button type="submit">Save monthly budget</button><?php if ($budget['updated_at']): ?><span class="hint">Last saved <?= escape(substr($budget['updated_at'], 0, 10)) ?></span><?php endif; ?></div>
     </form>
 </section>
+<?php require __DIR__ . '/travel-fund.php'; ?>
+<?php require __DIR__ . '/budget-recommendation.php'; ?>
 <details class="data-note"><summary>How categories and suggestions work</summary><p>Categories averaging more than $50 per month get an individual target. The rest share Misc. Averages use all earlier imported months before the budget month, excluding the current month. Months with no activity in a category count as zero when that month has other imported records or is confirmed complete. Missing months are excluded; imported history may be partial. Refunds and card payments are excluded.</p><p>Saved budgets keep their category grouping for that month, so later imports don’t move your targets. Misc also covers new categories that weren’t itemized when you saved. Targets carry forward, including the saved category grouping. Saving a change preserves other past months. A later saved budget takes precedence from its effective month.</p></details>
 <?php endif; ?>

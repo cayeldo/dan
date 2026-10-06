@@ -6,6 +6,7 @@ require __DIR__ . '/analyzer.php';
 require __DIR__ . '/analytics.php';
 require __DIR__ . '/monthly-reviews.php';
 require __DIR__ . '/budgets.php';
+require __DIR__ . '/budget-recommendations.php';
 require __DIR__ . '/admin.php';
 require __DIR__ . '/statements.php';
 

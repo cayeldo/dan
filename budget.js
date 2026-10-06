@@ -1,4 +1,4 @@
-/* All targets are entered by the user. This script only explains and totals them. */
+/* Manual target editing: explain and total inputs. Recommended plans are verified and applied on the server. */
 (() => {
     'use strict';
     let active = null;

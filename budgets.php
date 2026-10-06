@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/travel-fund.php';
 
 function budget_month_valid(string $month): bool
 {
@@ -122,17 +123,24 @@ function save_budget(PDO $db, int $user, string $month, array $amounts, string $
             if (!is_string($value)) { throw new InvalidArgumentException('Enter a valid amount for every target.'); }
             $targets[$key] = budget_target_cents($value);
         }
-        $json = json_encode($targets, JSON_THROW_ON_ERROR); $now = gmdate('Y-m-d H:i:s');
-        // Freeze elapsed inherited months before changing their source budget.
-        freeze_past_budgets($db, $user, $month);
-        if ($plan['source_month'] === $month && !$plan['snapshot']) {
-            analyzer_query($db, 'UPDATE analyzer_budgets SET targets_json = ?, revision = revision + 1, updated_at = ? WHERE user_id = ? AND month = ?', [$json, $now, $user, $month]);
-        } else {
-            analyzer_query($db, 'INSERT INTO analyzer_budgets (user_id, month, groups_json, targets_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [$user, $month, json_encode($plan['groups'], JSON_THROW_ON_ERROR), $json, $now, $now]);
-        }
-        analyzer_query($db, 'DELETE FROM analyzer_budget_snapshots WHERE user_id = ? AND month = ?', [$user, $month]);
+        persist_budget_targets($db, $user, $plan, $targets);
         $db->commit();
     } catch (Throwable $error) { if ($db->inTransaction()) { $db->rollBack(); } throw $error; }
+}
+
+/** Caller holds the user lock and has validated target membership and amounts. */
+function persist_budget_targets(PDO $db, int $user, array $plan, array $targets): void
+{
+    $month = $plan['month'];
+    $json = json_encode($targets, JSON_THROW_ON_ERROR); $now = gmdate('Y-m-d H:i:s');
+    // Freeze elapsed inherited months before changing their source budget.
+    freeze_past_budgets($db, $user, $month);
+    if ($plan['source_month'] === $month && !$plan['snapshot']) {
+        analyzer_query($db, 'UPDATE analyzer_budgets SET targets_json = ?, revision = revision + 1, updated_at = ? WHERE user_id = ? AND month = ?', [$json, $now, $user, $month]);
+    } else {
+        analyzer_query($db, 'INSERT INTO analyzer_budgets (user_id, month, groups_json, targets_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [$user, $month, json_encode($plan['groups'], JSON_THROW_ON_ERROR), $json, $now, $now]);
+    }
+    analyzer_query($db, 'DELETE FROM analyzer_budget_snapshots WHERE user_id = ? AND month = ?', [$user, $month]);
 }
 
 /** Effective-dated targets: an explicit later change supersedes an earlier plan. */
@@ -179,6 +187,7 @@ function budget_progress(PDO $db, int $user, string $month, ?string $today = nul
     $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
     $targets = json_decode($saved['targets_json'], true, 32, JSON_THROW_ON_ERROR);
     $history = spending_history($db, $user);
+    $rollover = travel_fund_balance($db, $user, $month, $history);
     $period = $history[$month] ?? ['expenses' => 0, 'categories' => [], 'daily' => []];
     if ($current) { $period = spending_through_day($period, (int) substr($today, 8, 2)); }
     $individual = array_column(array_filter($groups, fn($g) => $g['category_id'] !== null), 'category_id');
@@ -195,12 +204,44 @@ function budget_progress(PDO $db, int $user, string $month, ?string $today = nul
         $members = array_filter($period['categories'], fn($c) => $key === 'misc' ? !in_array($c['id'], $individual, true) : $c['id'] === $group['category_id']);
         $spent = array_sum(array_column($members, 'amount'));
         $halfMembers = array_filter($halfway['categories'], fn($c) => $key === 'misc' ? !in_array($c['id'], $individual, true) : $c['id'] === $group['category_id']);
-        $items[$key] = $group + budget_balance((int) $targets[$key], $spent) + ['members' => array_values($members), 'halfway_spent_cents' => array_sum(array_column($halfMembers, 'amount')),
+        $carry = $rollover && $group['category_id'] === $rollover['category_id'] ? $rollover['opening_cents'] : 0;
+        $items[$key] = $group + ['monthly_target_cents' => (int) $targets[$key], 'rollover_cents' => $carry] + budget_balance((int) $targets[$key] + $carry, $spent) + ['members' => array_values($members), 'halfway_spent_cents' => array_sum(array_column($halfMembers, 'amount')),
             'projected_cents' => $paceReady ? (int) round($spent / $elapsed * $days) : null];
+    }
+    // Move the tracked travel drawdown into over-budget categories for display only.
+    // Saved monthly targets stay intact, and category balances still sum to the total.
+    if ($rollover && $rollover['reallocated_cents'] > 0) {
+        $remaining = $rollover['reallocated_cents'];
+        foreach ($items as $key => &$item) {
+            if ($item['category_id'] === $rollover['category_id']) {
+                $item = array_replace($item, budget_balance($item['target_cents'] - $rollover['reallocated_cents'], $item['spent_cents']));
+                $item['travel_transfer_cents'] = -$rollover['reallocated_cents'];
+            }
+        } unset($item);
+        foreach ($items as &$item) {
+            if ($item['category_id'] === $rollover['category_id']) { continue; }
+            $transfer = min($remaining, max(0, -$item['available_cents']));
+            if ($transfer > 0) {
+                $item = array_replace($item, budget_balance($item['target_cents'] + $transfer, $item['spent_cents']));
+                $item['travel_transfer_cents'] = $transfer;
+                $remaining -= $transfer;
+            }
+        } unset($item);
+        // A cash limit below the saved targets can create a shortfall even before
+        // a category reaches its target. Keep that reserve transfer visible too.
+        if ($remaining > 0) {
+            foreach ($items as &$item) {
+                if ($item['category_id'] !== $rollover['category_id'] && $item['spent_cents'] > 0) {
+                    $item = array_replace($item, budget_balance($item['target_cents'] + $remaining, $item['spent_cents']));
+                    $item['travel_transfer_cents'] = ($item['travel_transfer_cents'] ?? 0) + $remaining;
+                    break;
+                }
+            } unset($item);
+        }
     }
     return ['month' => $month, 'source_month' => $saved['month'], 'current' => $current,
         'halfway_day' => $halfDay, 'halfway_spent_cents' => $halfway['expenses'],
         'complete' => month_is_complete($db, $user, $month), 'days_elapsed' => $elapsed, 'days_in_month' => $days,
-        'groups' => $items, 'total' => budget_balance(array_sum($targets), $period['expenses']) +
+        'groups' => $items, 'travel_fund' => $rollover, 'monthly_target_cents' => array_sum($targets), 'total' => budget_balance(array_sum($targets) + ($rollover['opening_cents'] ?? 0), $period['expenses']) +
             ['projected_cents' => $paceReady ? (int) round($period['expenses'] / $elapsed * $days) : null]];
 }

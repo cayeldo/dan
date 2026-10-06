@@ -179,3 +179,44 @@ CREATE TABLE IF NOT EXISTS analyzer_budget_snapshots (
     PRIMARY KEY (user_id, month),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- User-entered monthly resources and category minimums, effective from this month.
+CREATE TABLE IF NOT EXISTS analyzer_budget_resources (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    cash_cents BIGINT NOT NULL,
+    reserve_cents BIGINT NOT NULL,
+    preferences_json MEDIUMTEXT NOT NULL,
+    revision INT UNSIGNED NOT NULL DEFAULT 1,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A proposal never changes active targets until its owner explicitly applies it.
+CREATE TABLE IF NOT EXISTS analyzer_budget_recommendations (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    fingerprint CHAR(64) NOT NULL,
+    proposal_json MEDIUMTEXT NOT NULL,
+    ai_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    ai_json MEDIUMTEXT DEFAULT NULL,
+    model VARCHAR(80) DEFAULT NULL,
+    attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    started_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL,
+    applied_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Opt-in travel reserve begins with an explicit user-entered balance, never inferred old savings.
+CREATE TABLE IF NOT EXISTS analyzer_travel_funds (
+    user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    category_id BIGINT UNSIGNED NOT NULL,
+    start_month CHAR(7) NOT NULL,
+    opening_cents BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES analyzer_categories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -36,6 +36,12 @@ run_background_workers() {
             DAN_AI_CONFIG="$(dirname "$WEB_DIR")/dan-ai.json" \
             php "$REPO_DIR/deploy/categorize.php" || true
     fi
+    if [ -f "$REPO_DIR/deploy/explain-budgets.php" ]; then
+        timeout 90s sudo -u "$DEPLOY_USER" env \
+            DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
+            DAN_AI_CONFIG="$(dirname "$WEB_DIR")/dan-ai.json" \
+            php "$REPO_DIR/deploy/explain-budgets.php" || true
+    fi
     if [ -f "$REPO_DIR/deploy/review-months.php" ]; then
         timeout 90s sudo -u "$DEPLOY_USER" env \
             DAN_CONFIG="$(dirname "$WEB_DIR")/dan-config.php" \
