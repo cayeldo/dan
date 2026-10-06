@@ -41,20 +41,7 @@
         </a><?php endforeach; ?>
     </div>
 </section>
-<section class="panel shifts-panel" aria-labelledby="movers-heading">
-    <div class="section-heading"><div><h2 id="movers-heading">Category shifts</h2><p class="hint"><?= escape((new DateTimeImmutable($latest . '-01'))->format('M')) ?><?= $latest === gmdate('Y-m') ? ' so far' : '' ?> vs <?= escape((new DateTimeImmutable(previous_month($latest) . '-01'))->format('M')) ?></p></div><a href="<?= escape(analyzer_url($latest) . '#comparison-heading') ?>">Compare ↗</a></div>
-    <?php if ($dashboard['movers']): $largestChange = max(1, ...array_map(fn($item) => abs($item['delta']), $dashboard['movers'])); ?>
-    <div class="shift-grid">
-    <?php foreach ($dashboard['movers'] as $item): $length = abs($item['delta']) / $largestChange * 135;
-        $tip = $item['name'] . "\n" . month_label(previous_month($latest)) . ': ' . money($item['previous']) . "\n" . month_label($latest) . ($latest === gmdate('Y-m') ? ' so far' : '') . ': ' . money($item['current']) . "\n" . signed_money($item['delta']) . ($item['percent'] === null ? ' · new spending' : ' · ' . signed_percent($item['percent']));
-        $targetMonth = $item['current'] > 0 ? $latest : previous_month($latest); ?>
-    <a class="shift-card" href="<?= escape(analyzer_url($targetMonth) . '&category=' . $item['id'] . '#category-' . $item['id']) ?>" data-tooltip="<?= escape($tip) ?>">
-        <span><?= escape($item['name']) ?></span><strong class="<?= $item['delta'] > 0 ? 'change-up' : 'change-down' ?>"><?= $item['delta'] > 0 ? '↑ ' : '↓ ' ?><?= money(abs($item['delta'])) ?></strong>
-        <svg viewBox="0 0 300 30" aria-hidden="true"><line x1="150" x2="150" y1="0" y2="30" stroke="#c9d3e5"/><rect x="<?= sprintf('%.2F', $item['delta'] > 0 ? 150 : 150 - $length) ?>" y="6" width="<?= sprintf('%.2F', $length) ?>" height="18" rx="5" fill="<?= $item['delta'] > 0 ? '#c84b51' : '#128169' ?>"/></svg>
-    </a><?php endforeach; ?>
-    </div>
-    <?php else: ?><p class="hint"><?= $dashboard['comparison']['available'] ? 'No large changes this month.' : 'Add the previous month to see changes.' ?></p><?php endif; ?>
-</section>
+<?php require __DIR__ . '/overview-insights.php'; ?>
 <details class="data-note"><summary>About these numbers</summary><p>Based on imported purchases, before refunds. Missing months stay empty. Current-month totals are still in progress; other months may also contain partial statement history. Category links open their latest month with purchases. All-time net spending: <?= money($dashboard['expenses'] - $dashboard['refunds']) ?> after <?= money($dashboard['refunds']) ?> in credits.</p></details>
 <?php elseif ($dashboard !== null): ?>
 <section class="empty-state"><h2>A few charts. A clearer picture.</h2><p>Upload your first statement to begin.</p><a class="button" href="/?page=imports">Upload a statement</a></section>

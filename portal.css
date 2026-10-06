@@ -274,12 +274,6 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .month-tile small { font-size: .7rem; color: #56657b; }
 .month-tile:hover, .month-tile:focus-visible { background: #e6f5ef; outline: 2px solid #29a88f; outline-offset: 2px; }
 .month-tile.in-progress > span { color: var(--brand); font-weight: 700; }
-.shift-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
-.shift-card { display: flex; flex-direction: column; gap: 14px; padding: 20px; background: #f7f9fc; border: 1px solid #e8edf4; border-radius: 12px; color: #253b60; text-decoration: none; }
-.shift-card:hover { border-color: #29a88f; background: #eff8f3; }
-.shift-card > span { font-size: .875rem; }
-.shift-card strong { font-size: 1.5rem; letter-spacing: -.03em; }
-.shift-card svg { width: 100%; height: 30px; margin-top: auto; }
 .change-up { color: #b53b46 !important; }
 .change-down { color: #087768 !important; }
 .data-note { font-size: .85rem; color: #56657b; line-height: 1.7; }
@@ -310,7 +304,6 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
     .overview-category-layout .category-legend { max-height: 250px; }
     .overview-category-layout .donut-wrap { max-width: 260px; }
     .month-grid { gap: 8px; }
-    .shift-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
     .topbar nav { gap: 20px; flex-wrap: nowrap; overflow-x: auto; }
@@ -322,13 +315,10 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
     .overview-category-layout, .analyzer-hero .category-layout { grid-template-columns: 1fr; padding: 0; }
     .analyzer-hero .donut-wrap { max-width: 320px; }
     .analyzer-hero .category-legend { max-height: 240px; padding-right: 6px; }
-    .year-panel .section-heading, .shifts-panel .section-heading, .analyzer-hero .section-heading { flex-direction: row; align-items: center; }
+    .year-panel .section-heading, .analyzer-hero .section-heading { flex-direction: row; align-items: center; }
     .average-metric strong { font-size: 1.3rem; }
     .average-metric span { font-size: .75rem; }
     .month-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 8px; }
-    .shift-grid { gap: 12px; }
-    .shift-card { padding: 16px 12px; }
-    .shift-card strong { font-size: 1.25rem; }
     .chart-footer { gap: 14px; margin-top: 24px; }
     .chart-footer a { margin-left: 0; }
     .compact-disclosure { padding: 0; }
@@ -506,3 +496,28 @@ input[type=file]::file-selector-button { border: 1px solid #c6d1e2; border-radiu
 .travel-start-form > input { max-width: 260px; }
 .travel-start-form .coverage-confirm { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; font-size: .9rem; line-height: 1.5; }
 .travel-start-form .coverage-confirm input { width: 20px; min-height: 20px; flex-shrink: 0; margin-top: 2px; }
+
+/* Compact, actionable overview insights. */
+.overview-insights { padding: 22px 28px; }
+.overview-insights .section-heading { margin-bottom: 10px; }
+.overview-insights .section-heading h2 { margin-bottom: 3px; }
+.overview-insights .section-heading .hint { margin: 0; }
+.insight-list { list-style: none; padding: 0; margin: 0; }
+.insight-list li + li { border-top: 1px solid #e5eae9; }
+.insight-row { display: flex; align-items: center; gap: 14px; padding: 13px 2px; text-decoration: none; color: #1d2d45; border-radius: 6px; }
+.insight-row:hover { background: #f4f8f6; }
+.insight-row:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.insight-icon { display: grid; place-items: center; flex: 0 0 30px; height: 30px; border-radius: 50%; background: #edf2f8; color: #455c78; font-weight: 700; }
+.insight-attention .insight-icon { background: #fff1de; color: #98500c; }
+.insight-positive .insight-icon { background: #e1f2eb; color: #087967; }
+.insight-copy { min-width: 0; flex: 1; font-size: .875rem; line-height: 1.5; }
+.insight-label { display: inline-block; min-width: 150px; margin-right: 10px; color: #56657b; font-size: .78rem; }
+.insight-copy strong { font-weight: 650; overflow-wrap: anywhere; }
+.insight-detail { display: block; color: #56657b; font-size: .82rem; }
+.insight-arrow { color: var(--brand); flex-shrink: 0; }
+@media (max-width: 700px) {
+    .overview-insights { padding: 18px; }
+    .insight-row { align-items: flex-start; gap: 10px; }
+    .insight-label { display: block; margin: 0 0 2px; }
+    .insight-detail { margin-top: 3px; }
+}

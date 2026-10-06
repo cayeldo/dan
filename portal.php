@@ -7,6 +7,7 @@ require __DIR__ . '/analytics.php';
 require __DIR__ . '/monthly-reviews.php';
 require __DIR__ . '/budgets.php';
 require __DIR__ . '/budget-recommendations.php';
+require __DIR__ . '/overview-insights.php';
 require __DIR__ . '/admin.php';
 require __DIR__ . '/statements.php';
 
@@ -23,7 +24,7 @@ $accounts = []; $categories = []; $months = []; $imports = []; $report = null; $
 $accountFilter = max(0, (int) (is_scalar($_GET['account'] ?? null) ? $_GET['account'] : 0));
 $month = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
 $requestedMonth = $month;
-$history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = []; $budgetProgress = null; $statement = null;
+$overviewInsights = null; $history = []; $dashboard = null; $comparison = null; $monthlyReview = null; $latestReview = null; $closedMonths = []; $budgetProgress = null; $statement = null;
 $pending = $_SESSION['pending_import'] ?? null;
 if ($pending && ($pending['user_id'] !== $userId || time() - $pending['created_at'] > 1800)) {
     unset($_SESSION['pending_import']); $pending = null;
@@ -173,6 +174,7 @@ if ($page === 'home') {
         $homeDb = database();
         $history = spending_history($homeDb, $userId);
         $dashboard = spending_dashboard($history);
+        $overviewInsights = overview_insights($homeDb, $userId, $history);
         $savedMonths = analyzer_query($homeDb, "SELECT month FROM analyzer_month_reviews WHERE user_id = ? AND status = 'completed' ORDER BY month DESC LIMIT 12", [$userId])->fetchAll(PDO::FETCH_COLUMN);
         foreach ($savedMonths as $savedMonth) {
             $latestReview = saved_month_review($homeDb, $userId, $savedMonth);

@@ -197,7 +197,7 @@ $db->exec('INSERT INTO app_admins (user_id) VALUES (1)');
         check('Spending by category for August 2026' in report and '$50.00' in report and 'Red Robin' in report and '$30.00' in report, 'monthly chart and merchant totals render')
         check('No transactions have been imported for July 2026' in report, 'monthly comparison distinguishes missing prior data from zero')
         status, overview, _ = request('/')
-        check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Category shifts' in overview, 'portal renders all dashboard charts after import')
+        check(status == 200 and 'Monthly spending' in overview and 'Cumulative expenses' in overview and 'Worth a look' in overview and 'Category shifts' not in overview, 'overview replaces category shifts with compact linked insights')
         check('Automatic categorization is in progress.' in report and 'Curious Shop' in report, 'unknown merchant is queued without prompting for a category')
         check('id="audit-heading"' not in report and 'name="statement"' not in report, 'analyzer hides category audit and keeps upload on its own page')
         check('<details class="panel compact-disclosure" id="merchant-totals">' in report and 'Recent imports' not in report and '<details class="panel import-history compact-disclosure">' in request('/?page=imports')[1], 'merchant totals stay collapsed and recent imports move to setup')
