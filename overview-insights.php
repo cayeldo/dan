@@ -24,7 +24,7 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
     $url = '/?page=analyzer&month=' . $month . ($account > 0 ? '&account=' . $account : '');
     // Budget and reserve targets cover the user's whole budget, never a subset of cards.
     $wholeBudget = $account === 0 || count(user_accounts($db, $user)) === 1;
-    $fund = $wholeBudget ? travel_fund_balance($db, $user, $month, $history) : null;
+    $fund = $wholeBudget ? budget_fund_balance($db, $user, $month, $history) : null;
     $saved = $wholeBudget ? effective_budget($db, $user, $month) : null;
     if ($saved) {
         $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
@@ -60,9 +60,10 @@ function overview_insights(PDO $db, int $user, array $history, ?string $today = 
             'url' => $url . '&merchant=' . (int) $merchant['id'] . '#merchant-' . (int) $merchant['id']];
     }
     if ($fund && $fund['available_cents'] >= 2500 && ($fund['contribution_cents'] + $fund['spent_cents'] + $fund['reallocated_cents'] >= 2500 || ($fund['start_month'] === $month && $fund['opening_cents'] > 0))) {
-        $rows[] = ['visual' => 'fund', 'name' => 'Travel fund', 'fund' => $fund, 'kind' => 'positive', 'label' => 'Travel fund', 'title' => ucfirst(insight_amount($fund['available_cents'])) . ' left for travel',
-            'detail' => $fund['reallocated_cents'] > 0 ? 'After ' . insight_amount($fund['reallocated_cents']) . ' covered other overages. Only the remainder can carry forward.' : 'Includes this month’s contribution and prior carryover, after recorded spending.',
-            'url' => '/?page=budget&month=' . $month . '#travel-fund-heading'];
+        $fundName = ($fund['kind'] ?? '') === 'vacation' ? 'Vacation Fund' : 'Travel fund';
+        $rows[] = ['visual' => 'fund', 'name' => $fundName, 'fund' => $fund, 'kind' => 'positive', 'label' => $fundName, 'title' => ucfirst(insight_amount($fund['available_cents'])) . ' left for ' . ($fundName === 'Vacation Fund' ? 'vacations' : 'travel'),
+            'detail' => (($fund['kind'] ?? '') === 'vacation' && $fund['provisional'] ? 'Provisional. ' : '') . ($fund['reallocated_cents'] > 0 ? 'After ' . insight_amount($fund['reallocated_cents']) . ' covered other overages. Only the remainder can carry forward.' : 'Includes this month’s contribution and prior carryover, after recorded spending.'),
+            'url' => '/?page=budget&month=' . $month . '#vacation-fund-heading'];
     }
     {
         $comparison = spending_comparison($history, $month, $today);
@@ -158,6 +159,13 @@ function insight_explanation(array $row, string $month): string
     }
     if ($row['visual'] === 'fund') {
         $fund = $row['fund'];
+        if (($fund['kind'] ?? '') === 'vacation') {
+            return 'Vacation Fund · ' . $period . ($fund['provisional'] ? ' · provisional' : '')
+                . "\nCarried in: " . insight_amount($fund['opening_cents'])
+                . "\nContribution: " . insight_amount($fund['contribution_cents'])
+                . "\nMonthly shortage draw: " . insight_amount($fund['reallocated_cents'])
+                . "\nRemaining savings: " . insight_amount($fund['available_cents']) . '. Travel purchases stay in the expense budget.';
+        }
         return 'Travel fund · ' . $period . "\nCarried in: " . insight_amount($fund['opening_cents'])
             . "\nThis month's contribution: " . insight_amount($fund['contribution_cents'])
             . "\nTravel spending: " . insight_amount($fund['spent_cents'])

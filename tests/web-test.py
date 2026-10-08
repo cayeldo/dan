@@ -257,7 +257,7 @@ run_month_review($db, 1, fn() => ['headline' => 'A good start <script>bad()</scr
         check(status == 200 and 'Monthly budget' in budget_page and 'Historical average for Misc' in budget_page, 'Budget menu renders historical suggestion controls')
         check('name="targets[misc]"' in budget_page and 'value="" placeholder="Enter amount"' in budget_page, 'new targets stay blank despite available historical averages')
         check('About Misc' in budget_page and 'Examples from your past purchases:' in budget_page, 'category help includes examples from imported purchases')
-        check('Total monthly budget' in budget_page and 'data-budget-total aria-live="polite">$0.00' in budget_page, 'blank budget shows a dollar total before targets are entered')
+        check('Total monthly expense budget' in budget_page and 'data-budget-total aria-live="polite">$0.00' in budget_page, 'blank budget shows a dollar total before targets are entered')
         budget_fields = {'csrf': csrf, 'action': 'save_budget', 'budget_month': '2026-09', 'budget_version': token(budget_page, 'budget_version'), 'targets[misc]': '125.50'}
         check(request('/?page=budget', dict(budget_fields, csrf='wrong'))[0] == 403, 'budget saves require CSRF')
         check('Enter a monthly amount' in request('/?page=budget', dict(budget_fields, **{'targets[misc]': ''}))[1], 'empty budget targets are rejected by the server')
@@ -296,12 +296,25 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
         status, applied_page, _ = request('/?page=budget', apply_fields)
         check(status == 200 and 'Recommended budget applied' in applied_page and 'This recommendation was applied' in applied_page, 'one button applies the verified recommended budget')
         check('no longer available' in request('/?page=budget', apply_fields)[1], 'HTTP apply action cannot be replayed')
-        travel_fields = {'csrf': csrf, 'action': 'start_travel_fund', 'budget_month': current_month,
-            'budget_version': token(applied_page, 'budget_version'), 'travel_opening': '300', 'travel_confirmed': '1'}
-        check(request('/?page=budget', dict(travel_fields, csrf='wrong'))[0] == 403, 'travel starting balances require CSRF')
-        check('Confirm the starting balance' in request('/?page=budget', dict(travel_fields, travel_confirmed=''))[1], 'opening savings require an explicit confirmation')
-        status, travel_page, _ = request('/?page=budget', travel_fields)
-        check(status == 200 and 'Travel rollover started' in travel_page and '$300.00' in travel_page and 'Travel target above' in travel_page, 'travel fund starts with an explicit opening balance and displays its rules')
+        vacation_fields = {'csrf': csrf, 'action': 'save_vacation_fund', 'budget_month': current_month,
+            'budget_version': token(applied_page, 'budget_version'), 'vacation_version': token(applied_page, 'vacation_version'),
+            'vacation_opening': '300', 'vacation_contribution': '25', 'vacation_confirmed': '1'}
+        check(request('/?page=budget', dict(vacation_fields, csrf='wrong'))[0] == 403, 'Vacation Fund starting balances require CSRF')
+        check('Confirm the starting balance' in request('/?page=budget', dict(vacation_fields, vacation_confirmed=''))[1], 'opening savings require explicit confirmation')
+        status, travel_page, _ = request('/?page=budget', vacation_fields)
+        check(status == 200 and 'Vacation Fund saved' in travel_page and '$300.00' in travel_page and 'Monthly Vacation Fund contribution' in travel_page, 'Vacation Fund starts separately from Travel and shows a monthly contribution field')
+        check('Your Vacation Fund changed since this recommendation' in travel_page, 'saved comparisons warn when their savings assumptions are outdated')
+        check('Shortage draw · provisional' in travel_page and 'Travel is your monthly expense category' in travel_page, 'open-month fund draws are labeled provisional and distinct from purchases')
+        check('Reload the Budget page' in request('/?page=budget', vacation_fields)[1], 'stale Vacation Fund forms cannot be replayed')
+        vacation_update = {'csrf': csrf, 'action': 'save_vacation_fund', 'budget_month': current_month,
+            'budget_version': token(travel_page, 'budget_version'), 'vacation_version': token(travel_page, 'vacation_version'),
+            'vacation_contribution': '0'}
+        check(request('/?page=budget', dict(vacation_update, csrf='wrong'))[0] == 403, 'contribution changes require CSRF too')
+        status, paused_fund, _ = request('/?page=budget', vacation_update)
+        check(status == 200 and 'Vacation Fund saved' in paused_fund and 'name="vacation_contribution" value="0.00"' in paused_fund and '$300.00' in paused_fund, 'contributions can pause without resetting accumulated savings')
+        fund_progress = request('/?page=analyzer&month=' + current_month)[1]
+        check('Vacation Fund (provisional)' in request('/?page=statements&month=' + current_month)[1], 'statements report vacation savings separately from purchases')
+        check('Vacation Fund:' in fund_progress and 'Expense targets below stay separate from savings' in fund_progress, 'analyzer displays Vacation Fund separately from category targets')
 
         if os.environ.get('DAN_PREVIEW_DIR'):
             destination = Path(os.environ['DAN_PREVIEW_DIR'])
@@ -421,7 +434,7 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
         check('value="125.50"' not in request('/?page=budget&month=2026-09')[1], 'second user cannot see the first user’s budget targets')
         check('ODD LITTLE SHOP' not in request('/?page=uncategorized')[1], 'cleanup cannot expose another user’s purchase details')
         other_budget = request('/?page=budget&month=' + current_month)[1]
-        check('value="200.00"' not in other_budget and 'Still available' not in other_budget and 'Planning baseline</th>' not in other_budget, 'cash inputs, recommendations and travel balances remain private')
+        check('value="200.00"' not in other_budget and 'Carried into this month' not in other_budget and '$300.00' not in other_budget and 'Planning baseline</th>' not in other_budget, 'cash inputs, recommendations and travel balances remain private')
         check('$50.00' not in request('/?page=statements&month=2026-08')[1], 'statement rows and totals remain private to their owner')
         check(request('/?page=statements&month=2026-08&account=999999&download=pdf')[0] == 403, 'foreign card PDF requests are rejected')
         status, other_connect, _ = request('/?page=connect')

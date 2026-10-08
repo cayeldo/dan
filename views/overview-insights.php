@@ -15,7 +15,7 @@
             $support = insight_figure($insight['amount_cents']) . ' ' . $periodLabel . ' · ' . insight_figure((int) round($insight['amount_cents'] / $insight['count'])) . ' each';
         } elseif ($visual === 'fund') {
             $fund = $insight['fund']; $total = max(1, $fund['opening_cents'] + $fund['contribution_cents']);
-            $metric = insight_figure($fund['available_cents']); $metricLabel = 'available';
+            $metric = insight_figure($fund['available_cents']); $metricLabel = ($fund['kind'] ?? '') === 'vacation' && $fund['provisional'] ? 'provisional' : 'available';
             $support = $fund['reallocated_cents'] > 0 ? insight_figure($fund['reallocated_cents']) . ' used for other spending' : ($fund['contribution_cents'] > 0 ? insight_figure($fund['contribution_cents']) . ' set aside ' . $periodLabel : 'Ready for your next trip');
             $bar = min(100, $fund['available_cents'] / $total * 100);
         } elseif ($visual === 'comparison') {

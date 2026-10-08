@@ -35,12 +35,12 @@
             <div class="budget-amount"><span aria-hidden="true">$</span><input type="text" inputmode="decimal" name="targets[<?= escape($key) ?>]" id="target-<?= escape($key) ?>" value="<?= escape($amount) ?>" placeholder="Enter amount" maxlength="16" autocomplete="off" required data-budget-target></div>
         </div>
         <?php endforeach; ?>
-        <div class="budget-total"><span>Total monthly budget</span><output data-budget-total aria-live="polite"><?= money($budgetEnteredTotal) ?></output></div>
+        <div class="budget-total"><span>Total monthly expense budget</span><output data-budget-total aria-live="polite"><?= money($budgetEnteredTotal) ?></output></div>
         <p class="hint" data-budget-remaining><?= $budgetMissing ? $budgetMissing . ' target' . ($budgetMissing === 1 ? '' : 's') . ' left to enter.' : 'All targets entered.' ?></p>
         <div class="budget-actions"><button type="submit">Save monthly budget</button><?php if ($budget['updated_at']): ?><span class="hint">Last saved <?= escape(substr($budget['updated_at'], 0, 10)) ?></span><?php endif; ?></div>
     </form>
 </section>
-<?php require __DIR__ . '/travel-fund.php'; ?>
+<?php require __DIR__ . '/vacation-fund.php'; ?>
 <?php require __DIR__ . '/budget-recommendation.php'; ?>
 <details class="data-note"><summary>How categories and suggestions work</summary><p>Categories averaging more than $50 per month get an individual target. The rest share Misc. Averages use all earlier imported months before the budget month, excluding the current month. Months with no activity in a category count as zero when that month has other imported records or is confirmed complete. Missing months are excluded; imported history may be partial. Refunds and card payments are excluded.</p><p>Saved budgets keep their category grouping for that month, so later imports don’t move your targets. Misc also covers new categories that weren’t itemized when you saved. Targets carry forward, including the saved category grouping. Saving a change preserves other past months. A later saved budget takes precedence from its effective month.</p></details>
 <?php endif; ?>

@@ -14,7 +14,8 @@ $budgetPercent = $balance ? ($balance['target_cents'] > 0 ? min(100, $balance['s
     <?php if (!$budgetProgress): ?><p class="hint">Set a budget for this month to track your spending against a plan. Your targets will carry forward.</p>
     <?php else: $balance = $budgetProgress['total']; ?>
     <?php if ($accountFilter): ?><p class="hint">This budget includes all your imported cards, even while the spending chart above is filtered to one card. Budget details open across all cards.</p><?php endif; ?>
-    <?php if ($budgetProgress['travel_fund']): $fund = $budgetProgress['travel_fund']; ?><p class="hint">Includes <?= money($fund['opening_cents']) ?> carried forward for travel. Travel fund left after recorded purchases and other overages: <strong><?= money($fund['available_cents']) ?></strong>.<?php if ($fund['reallocated_cents']): ?> <?= money($fund['reallocated_cents']) ?> has been used to cover other category overages and will not carry forward.<?php endif; ?></p><?php endif; ?>
+    <?php if (($budgetProgress['travel_fund']['kind'] ?? '') === 'vacation'): $fund = $budgetProgress['travel_fund']; ?><p class="hint"><strong>Vacation Fund: <?= money($fund['available_cents']) ?></strong><?= $fund['provisional'] ? ' · provisional' : '' ?>. <?= money($fund['contribution_cents']) ?> contributed; <?= money($fund['reallocated_cents']) ?> drawn for the overall monthly shortage.<?php if ($fund['unfunded_cents']): ?> <?= money($fund['unfunded_cents']) ?> remains uncovered.<?php endif; ?> Expense targets below stay separate from savings.</p>
+    <?php elseif ($budgetProgress['travel_fund']): $fund = $budgetProgress['travel_fund']; ?><p class="hint">Includes <?= money($fund['opening_cents']) ?> carried forward for travel. Travel fund left after recorded purchases and other overages: <strong><?= money($fund['available_cents']) ?></strong>.<?php if ($fund['reallocated_cents']): ?> <?= money($fund['reallocated_cents']) ?> has been used to cover other category overages and will not carry forward.<?php endif; ?></p><?php endif; ?>
     <div class="budget-progress-summary">
         <div><span class="muted">Budget</span><strong class="budget-figure budget-<?= escape($balance['status']) ?>"><?= money($balance['available_cents']) ?></strong><span><?= money($balance['spent_cents']) ?> spent of <?= money($balance['target_cents']) ?></span><small><?= $balance['status'] === 'over' ? 'Over budget' : ($balance['status'] === 'near' ? '25% or less available' : 'Within budget') ?></small></div>
         <div class="budget-pace"><h3>Spending pace</h3>
@@ -35,7 +36,7 @@ $budgetPercent = $balance ? ($balance['target_cents'] > 0 ? min(100, $balance['s
         </div>
     <?php endforeach; ?>
     </div>
-    <p class="hint">Budget figures show target minus purchases, before refunds; card payments are excluded. Unspent amounts in one category can offset overages elsewhere in the overall budget. Saved monthly targets stay the same. When travel rollover is enabled, the available amounts reflect travel money used to cover other overages.</p>
+    <p class="hint">Budget figures show target minus purchases, before refunds; card payments are excluded. Unspent amounts in one category can offset overages elsewhere in the overall budget. Saved monthly targets stay the same. Vacation Fund savings and shortage draws appear separately above. Historical travel rollover budgets include their original reserve adjustments.</p>
     <?php endif; ?>
     </div>
 </details>

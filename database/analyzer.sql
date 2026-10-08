@@ -220,3 +220,22 @@ CREATE TABLE IF NOT EXISTS analyzer_travel_funds (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES analyzer_categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Vacation savings is independent of expense categories. Legacy travel funds remain historical.
+CREATE TABLE IF NOT EXISTS analyzer_vacation_funds (
+    user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    start_month CHAR(7) NOT NULL,
+    opening_cents BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Contributions carry forward until the next explicit monthly change.
+CREATE TABLE IF NOT EXISTS analyzer_vacation_contributions (
+    user_id BIGINT UNSIGNED NOT NULL,
+    month CHAR(7) NOT NULL,
+    contribution_cents BIGINT NOT NULL,
+    revision INT UNSIGNED NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, month),
+    FOREIGN KEY (user_id) REFERENCES analyzer_vacation_funds(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

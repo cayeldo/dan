@@ -25,32 +25,8 @@ function start_travel_fund(PDO $db, int $user, string $month, string $opening, s
         if (analyzer_query($db, 'SELECT user_id FROM analyzer_travel_funds WHERE user_id = ?', [$user])->fetchColumn()) { throw new InvalidArgumentException('Your travel fund is already running. Its balance is calculated from your saved budgets and spending.'); }
         $plan = budget_plan($db, $user, $month);
         if (!$plan['source_month'] || !hash_equals($budgetVersion, budget_form_version($plan))) { throw new InvalidArgumentException('Save your budget first, then start the travel fund.'); }
-        $groups = array_filter($plan['groups'], fn($g) => $g['name'] === 'Travel' && $g['category_id'] !== null);
-        if (!$groups) {
-            $category = (int) analyzer_query($db, 'SELECT id FROM analyzer_categories WHERE user_id = ? AND name = ?', [$user, 'Travel'])->fetchColumn();
-            if (!$category) {
-                analyzer_query($db, 'INSERT INTO analyzer_categories (user_id, name) VALUES (?, ?)', [$user, 'Travel']);
-                $category = (int) $db->lastInsertId();
-            }
-            $key = 'category_' . $category;
-            $plan['groups'] = [$key => ['name' => 'Travel', 'category_id' => $category]] + $plan['groups'];
-            $targets = [$key => 0] + $plan['targets'];
-            persist_budget_targets($db, $user, $plan, $targets);
-            analyzer_query($db, 'UPDATE analyzer_budgets SET groups_json = ? WHERE user_id = ? AND month = ?', [json_encode($plan['groups'], JSON_THROW_ON_ERROR), $user, $month]);
-        } else { $category = (int) array_values($groups)[0]['category_id']; }
-        if (!analyzer_query($db, 'SELECT id FROM analyzer_categories WHERE id = ? AND user_id = ?', [$category, $user])->fetchColumn()) { throw new InvalidArgumentException('Travel category unavailable.'); }
+        $category = separate_travel_target($db, $user, $month, $plan);
         analyzer_query($db, 'INSERT INTO analyzer_travel_funds (user_id, category_id, start_month, opening_cents, created_at) VALUES (?, ?, ?, ?, ?)', [$user, $category, $month, $cents, gmdate('Y-m-d H:i:s')]);
-        // Previously saved future plans must also keep Travel separate from Misc,
-        // otherwise the reserve could disappear from category progress totals.
-        foreach (analyzer_query($db, 'SELECT month, groups_json, targets_json FROM analyzer_budgets WHERE user_id = ? AND month > ?', [$user, $month])->fetchAll() as $future) {
-            $groups = json_decode($future['groups_json'], true, 32, JSON_THROW_ON_ERROR);
-            if (in_array($category, array_column($groups, 'category_id'), true)) { continue; }
-            $key = 'category_' . $category;
-            $groups = [$key => ['name' => 'Travel', 'category_id' => $category]] + $groups;
-            $targets = [$key => 0] + json_decode($future['targets_json'], true, 32, JSON_THROW_ON_ERROR);
-            analyzer_query($db, 'UPDATE analyzer_budgets SET groups_json = ?, targets_json = ?, revision = revision + 1, updated_at = ? WHERE user_id = ? AND month = ?',
-                [json_encode($groups, JSON_THROW_ON_ERROR), json_encode($targets, JSON_THROW_ON_ERROR), gmdate('Y-m-d H:i:s'), $user, $future['month']]);
-        }
         $db->commit();
     } catch (Throwable $error) { if ($db->inTransaction()) { $db->rollBack(); } throw $error; }
 }
@@ -98,4 +74,37 @@ function travel_fund_balance(PDO $db, int $user, string $month, ?array $history 
         $balance = $entry['available_cents']; $ledger[] = $entry;
     }
     return null;
+}
+
+/** Keep ordinary Travel expenses visible even below the usual itemization threshold. */
+function separate_travel_target(PDO $db, int $user, string $month, array $plan): int
+{
+    $groups = array_filter($plan['groups'], fn($g) => $g['name'] === 'Travel' && $g['category_id'] !== null);
+    if (!$groups) {
+        $category = (int) analyzer_query($db, 'SELECT id FROM analyzer_categories WHERE user_id = ? AND name = ?', [$user, 'Travel'])->fetchColumn();
+        if (!$category) {
+            analyzer_query($db, 'INSERT INTO analyzer_categories (user_id, name) VALUES (?, ?)', [$user, 'Travel']);
+            $category = (int) $db->lastInsertId();
+        }
+        $key = 'category_' . $category;
+        $plan['groups'] = [$key => ['name' => 'Travel', 'category_id' => $category]] + $plan['groups'];
+        $targets = [$key => 0] + $plan['targets'];
+        persist_budget_targets($db, $user, $plan, $targets);
+        analyzer_query($db, 'UPDATE analyzer_budgets SET groups_json = ? WHERE user_id = ? AND month = ?', [json_encode($plan['groups'], JSON_THROW_ON_ERROR), $user, $month]);
+    } else { $category = (int) array_values($groups)[0]['category_id']; }
+    if (!analyzer_query($db, 'SELECT id FROM analyzer_categories WHERE id = ? AND user_id = ?', [$category, $user])->fetchColumn()) { throw new InvalidArgumentException('Travel category unavailable.'); }
+
+    // Previously saved future plans must also keep Travel separate from Misc,
+    // otherwise the reserve could disappear from category progress totals.
+    foreach (analyzer_query($db, 'SELECT month, groups_json, targets_json FROM analyzer_budgets WHERE user_id = ? AND month > ?', [$user, $month])->fetchAll() as $future) {
+        $groups = json_decode($future['groups_json'], true, 32, JSON_THROW_ON_ERROR);
+        if (in_array($category, array_column($groups, 'category_id'), true)) { continue; }
+        $key = 'category_' . $category;
+        $groups = [$key => ['name' => 'Travel', 'category_id' => $category]] + $groups;
+        $targets = [$key => 0] + json_decode($future['targets_json'], true, 32, JSON_THROW_ON_ERROR);
+        analyzer_query($db, 'UPDATE analyzer_budgets SET groups_json = ?, targets_json = ?, revision = revision + 1, updated_at = ? WHERE user_id = ? AND month = ?',
+            [json_encode($groups, JSON_THROW_ON_ERROR), json_encode($targets, JSON_THROW_ON_ERROR), gmdate('Y-m-d H:i:s'), $user, $future['month']]);
+    }
+
+    return $category;
 }

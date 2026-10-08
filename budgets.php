@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/travel-fund.php';
+require_once __DIR__ . '/vacation-fund.php';
 
 function budget_month_valid(string $month): bool
 {
@@ -187,7 +188,7 @@ function budget_progress(PDO $db, int $user, string $month, ?string $today = nul
     $groups = json_decode($saved['groups_json'], true, 32, JSON_THROW_ON_ERROR);
     $targets = json_decode($saved['targets_json'], true, 32, JSON_THROW_ON_ERROR);
     $history = spending_history($db, $user);
-    $rollover = travel_fund_balance($db, $user, $month, $history);
+    $rollover = budget_fund_balance($db, $user, $month, $history);
     $period = $history[$month] ?? ['expenses' => 0, 'categories' => [], 'daily' => []];
     if ($current) { $period = spending_through_day($period, (int) substr($today, 8, 2)); }
     $individual = array_column(array_filter($groups, fn($g) => $g['category_id'] !== null), 'category_id');
@@ -210,7 +211,7 @@ function budget_progress(PDO $db, int $user, string $month, ?string $today = nul
     }
     // Move the tracked travel drawdown into over-budget categories for display only.
     // Saved monthly targets stay intact, and category balances still sum to the total.
-    if ($rollover && $rollover['reallocated_cents'] > 0) {
+    if ($rollover && ($rollover['kind'] ?? '') !== 'vacation' && $rollover['reallocated_cents'] > 0) {
         $remaining = $rollover['reallocated_cents'];
         foreach ($items as $key => &$item) {
             if ($item['category_id'] === $rollover['category_id']) {
@@ -242,6 +243,6 @@ function budget_progress(PDO $db, int $user, string $month, ?string $today = nul
     return ['month' => $month, 'source_month' => $saved['month'], 'current' => $current,
         'halfway_day' => $halfDay, 'halfway_spent_cents' => $halfway['expenses'],
         'complete' => month_is_complete($db, $user, $month), 'days_elapsed' => $elapsed, 'days_in_month' => $days,
-        'groups' => $items, 'travel_fund' => $rollover, 'monthly_target_cents' => array_sum($targets), 'total' => budget_balance(array_sum($targets) + ($rollover['opening_cents'] ?? 0), $period['expenses']) +
+        'groups' => $items, 'travel_fund' => $rollover, 'monthly_target_cents' => array_sum($targets), 'total' => budget_balance(array_sum($targets) + (($rollover['kind'] ?? '') === 'vacation' ? 0 : ($rollover['opening_cents'] ?? 0)), $period['expenses']) +
             ['projected_cents' => $paceReady ? (int) round($period['expenses'] / $elapsed * $days) : null]];
 }
