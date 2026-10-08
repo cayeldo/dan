@@ -10,7 +10,15 @@ check($short['available_cents'] === 35000 && $short['reserve_used_elsewhere_cent
 $exhausted = vacation_fund_month(10000, 20000, 150000, 105000);
 check($exhausted['available_cents'] === 0 && $exhausted['unfunded_cents'] === 15000, 'Vacation Fund never goes negative or conceals an uncovered shortage');
 $cash = vacation_fund_month(40000, 20000, 105000, 105000, 110000);
-check($cash['contribution_cents'] === 5000 && $cash['available_cents'] === 45000, 'known cash caps contributions after ordinary expense targets');
+check($cash['contribution_cents'] === 20000 && $cash['available_cents'] === 60000 && $cash['reallocated_cents'] === 0 && $cash['planning_gap_cents'] === 15000, 'a cash planning gap cannot reduce savings while spending is within the expense budget');
+// Reproduce the reported $500 -> $496 bug without relying on the user's cash inputs.
+$october = vacation_fund_month(0, 50000, 73944, 200400, 250000);
+check($october['contribution_cents'] === 50000 && $october['available_cents'] === 50000 && $october['reallocated_cents'] === 0 && $october['planning_gap_cents'] === 400, '$739.44 spent below the overall budget keeps all $500 despite a $4 planning gap');
+$atBudget = vacation_fund_month(0, 50000, 200400, 200400, 250000);
+$aboveBudget = vacation_fund_month(0, 50000, 200401, 200400, 250000);
+check($atBudget['reallocated_cents'] === 0 && $aboveBudget['reallocated_cents'] === 1 && $aboveBudget['available_cents'] === 49999, 'only the first cent beyond the combined expense budget draws from savings');
+$noCash = vacation_fund_month(10000, 50000, 0, 200400, 0);
+check($noCash['available_cents'] === 60000 && $noCash['planning_gap_cents'] === 250400 && $noCash['reallocated_cents'] === 0, 'cash input mismatches remain planning warnings and do not masquerade as spending');
 $surplus = vacation_fund_month(40000, 20000, 120000, 105000, 150000);
 check($surplus['available_cents'] === 60000 && $surplus['reallocated_cents'] === 0, 'unallocated monthly cash covers expenses before savings are drawn');
 
@@ -46,6 +54,11 @@ $progress = budget_progress($db, 37, $month);
 check($progress['groups'][$travelKey]['spent_cents'] === 5000 && $progress['groups'][$travelKey]['target_cents'] === 5000 && $progress['total']['target_cents'] === 105000, 'category and total expense targets exclude all vacation savings');
 check(array_sum(array_column($progress['groups'], 'available_cents')) === $progress['total']['available_cents'], 'expense totals reconcile independently of the fund');
 check(vacation_fund_balance($db, 37, $future)['opening_cents'] === 40000, 'unfinished monthly contributions cannot become future accumulated savings');
+$offsetPlan = budget_plan($db, 37, $month);
+save_budget($db, 37, $month, [$travelKey => '25', 'misc' => '1025'], budget_form_version($offsetPlan));
+$offsetProgress = budget_progress($db, 37, $month);
+check($offsetProgress['groups'][$travelKey]['available_cents'] === -2500 && $offsetProgress['groups']['misc']['available_cents'] === 2500 && vacation_fund_balance($db, 37, $month)['reallocated_cents'] === 0, 'unused Misc budget fully offsets a Travel overage before Vacation Fund is touched');
+save_budget($db, 37, $month, [$travelKey => '50', 'misc' => '1000'], budget_form_version(budget_plan($db, 37, $month)));
 $priorities = [$travelKey => 'cut_first', 'misc' => 'protect']; $minimums = [$travelKey => '', 'misc' => ''];
 $rec = recommend_for_test($db, 37, $month, '1250', '0', $priorities, $minimums)['proposal'];
 check($rec['capacity_cents'] === 105000 && $rec['vacation_contribution_cents'] === 20000 && $rec['recommended_total_cents'] === 105000, 'recommendation reserves the separate contribution exactly once');

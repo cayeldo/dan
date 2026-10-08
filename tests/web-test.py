@@ -306,6 +306,17 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
         check('Your Vacation Fund changed since this recommendation' in travel_page, 'saved comparisons warn when their savings assumptions are outdated')
         check('Shortage draw · provisional' in travel_page and 'Travel is your monthly expense category' in travel_page, 'open-month fund draws are labeled provisional and distinct from purchases')
         check('Reload the Budget page' in request('/?page=budget', vacation_fields)[1], 'stale Vacation Fund forms cannot be replayed')
+        # Cash after the cushion is $180; $159 of targets plus $25 savings is a $4 planning gap.
+        gap_fields = {'csrf': csrf, 'action': 'save_budget', 'budget_month': current_month,
+            'budget_version': token(travel_page, 'budget_version')}
+        for target_name in re.findall(r'name="(targets\[[^\]]+\])"', travel_page):
+            gap_fields[target_name] = '159' if target_name == 'targets[misc]' else '0'
+        status, travel_page, _ = request('/?page=budget', gap_fields)
+        check(status == 200 and 'by $4.00' in travel_page and 'This planning gap does not reduce your Vacation Fund' in travel_page,
+              'a $4 cash planning gap is explained without taking savings')
+        check('Contribution · provisional</span><strong>$25.00' in travel_page and 'Balance · provisional</span><strong>$325.00' in travel_page
+              and 'Shortage draw · provisional</span><strong>$0.00' in travel_page and 'Only $21.00' not in travel_page,
+              'unused expense targets do not trim the full contribution or balance')
         vacation_update = {'csrf': csrf, 'action': 'save_vacation_fund', 'budget_month': current_month,
             'budget_version': token(travel_page, 'budget_version'), 'vacation_version': token(travel_page, 'vacation_version'),
             'vacation_contribution': '0'}

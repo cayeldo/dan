@@ -50,15 +50,17 @@ function save_vacation_fund(PDO $db, int $user, string $month, string $contribut
 /** A contribution is savings, never a purchase. Only a net monthly shortage draws it down. */
 function vacation_fund_month(int $opening, int $planned, int $spent, int $expenseTarget, ?int $cashCapacity = null): array
 {
-    $funded = $cashCapacity === null ? $planned : min($planned, max(0, $cashCapacity - $expenseTarget));
-    $expenseCapacity = $cashCapacity === null ? $expenseTarget : max(0, $cashCapacity - $funded);
+    // Targets are allowances, not purchases. Never debit savings for an unused target
+    // or a planning gap; all expense allowances must be exhausted first.
+    $expenseCapacity = $cashCapacity === null ? $expenseTarget : max($expenseTarget, $cashCapacity - $planned);
     $shortage = max(0, $spent - $expenseCapacity);
-    $draw = min($opening + $funded, $shortage);
+    $draw = min($opening + $planned, $shortage);
     return ['kind' => 'vacation', 'category_id' => -1, 'opening_cents' => $opening,
-        'planned_contribution_cents' => $planned, 'contribution_cents' => $funded, 'spent_cents' => 0,
+        'planned_contribution_cents' => $planned, 'contribution_cents' => $planned, 'spent_cents' => 0,
+        'planning_gap_cents' => $cashCapacity === null ? 0 : max(0, $expenseTarget + $planned - $cashCapacity),
         'expense_capacity_cents' => $expenseCapacity, 'shortage_cents' => $shortage,
-        'reallocated_cents' => $draw, 'reserve_used_elsewhere_cents' => max(0, $draw - $funded),
-        'available_cents' => $opening + $funded - $draw, 'unfunded_cents' => $shortage - $draw];
+        'reallocated_cents' => $draw, 'reserve_used_elsewhere_cents' => max(0, $draw - $planned),
+        'available_cents' => $opening + $planned - $draw, 'unfunded_cents' => $shortage - $draw];
 }
 
 function vacation_fund_balance(PDO $db, int $user, string $month, ?array $history = null): ?array
