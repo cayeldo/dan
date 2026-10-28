@@ -67,3 +67,14 @@
 
 .statement-scroll-hint { display: none; }
 @media screen and (max-width: 700px) { .statement-scroll-hint { display: block; font-size: 12px; color: #526269; } }
+
+.statement-category-block { page-break-inside: avoid; }
+.statement-controls .report-filter { flex-wrap: wrap; }
+.statement-controls .report-filter select { max-width: 100%; }
+.statement-pdf .statement-meta span { margin-top: 5px; }
+.statement-pdf .spending-statement .statement-masthead { margin-bottom: 12px; }
+.statement-pdf .statement-logo { width: 96px; height: 64px; }
+.statement-pdf .spending-statement h2 { margin-top: 12px; }
+.statement-pdf .statement-disclaimer { margin-top: 12px; padding-top: 8px; }
+.statement-pdf .spending-statement th, .statement-pdf .spending-statement td { padding: 4px 6px; }
+.statement-pdf .statement-caption { margin: 6px 0 8px; }

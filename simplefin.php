@@ -120,7 +120,7 @@ function simplefin_rows(array $account, string $start): array
         if ($date < $start || $date > gmdate('Y-m-d')) { continue; }
         $description = clean_label($t['description'], 500); $amount = parse_cents($t['amount']);
         $payment = $amount > 0 && preg_match('/\b(?:PAYMENT|AUTOPAY|AUTO PAY|PYMT|PMT)\b/i', $description);
-        $kind = $payment ? 'payment' : ($amount < 0 ? 'expense' : 'refund');
+        $kind = ($payment || is_payment_reversal($description)) ? 'payment' : ($amount < 0 ? 'expense' : 'refund');
         $rows[] = ['date' => $date, 'description' => $description, 'memo' => '', 'amount' => $amount, 'kind' => $kind,
             'reference' => 'sfin:' . hash('sha256', $t['id']), 'dedupe_key' => hash('sha256', 'simplefin:' . simplefin_remote_key($account) . ':' . $t['id']),
             'suggestion' => $kind === 'payment' ? null : classify_merchant($description)];
@@ -149,6 +149,8 @@ function simplefin_import(PDO $db, int $user, array $link, array $account): arra
         $importId = (int) $db->lastInsertId();
         foreach ($rows as $row) {
             $existing = analyzer_query($db, 'SELECT * FROM analyzer_transactions WHERE user_id = ? AND account_id = ? AND dedupe_key = ?', [$user, $accountId, $row['dedupe_key']])->fetch();
+            $manualKind = $existing ? analyzer_query($db, 'SELECT kind FROM analyzer_transaction_types WHERE transaction_id = ? AND user_id = ?', [$existing['id'], $user])->fetchColumn() : false;
+            if ($manualKind) { $row['kind'] = $manualKind; $row['suggestion'] = $manualKind === 'payment' ? null : classify_merchant($row['description']); }
             if ($existing && $existing['transaction_date'] === $row['date'] && (int) $existing['amount_cents'] === $row['amount'] && $existing['description'] === $row['description'] && $existing['kind'] === $row['kind']) { $skipped++; continue; }
             // Preserve manual merchant/category choices when the provider corrects amount/date/description.
             $merchant = $row['kind'] === 'payment' ? null : (($existing['merchant_id'] ?? null) ?: resolve_merchant($db, $user, $row['suggestion']));

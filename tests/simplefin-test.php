@@ -37,6 +37,11 @@ try {
     check($report['count'] === 4 && $report['expenses'] === 3850 && $report['refunds'] === 200 && $report['payments'] === 10000, 'imports distinct purchases and refunds, excludes pending and separates payments');
     $counts = simplefin_import($db, 1, $link, $account);
     check($counts === ['added' => 0, 'updated' => 0, 'skipped' => 4], 'overlapping refresh deduplicates stable IDs without collapsing separate equal purchases');
+    $manualTransaction = (int) analyzer_query($db, "SELECT id FROM analyzer_transactions WHERE account_id = ? AND kind = 'expense' ORDER BY id LIMIT 1", [$card])->fetchColumn();
+    save_transaction_type($db, 1, $manualTransaction, 'payment');
+    simplefin_import($db, 1, $link, $account);
+    check(analyzer_query($db, 'SELECT kind FROM analyzer_transactions WHERE id = ?', [$manualTransaction])->fetchColumn() === 'payment', 'manual payment correction survives provider refresh');
+    save_transaction_type($db, 1, $manualTransaction, 'spending');
     $merchant = $report['merchants'][array_key_first($report['merchants'])];
     update_merchant($db, 1, $merchant['id'], $merchant['name'], 0, 'My groceries');
     $account['transactions'][0]['amount'] = '-21.25';

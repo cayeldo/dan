@@ -115,6 +115,15 @@ try {
             analyzer_query($db, "UPDATE analyzer_month_reviews SET status = 'pending' WHERE user_id = ? AND month = ? AND status = 'failed'", [$userId, $reviewMonth]);
             $_SESSION['notice'] = 'Review retry requested. The saved result will appear when ready.';
             redirect_analyzer($reviewMonth);
+        } elseif ($action === 'save_transaction_type') {
+            save_transaction_type($db, $userId, (int) input('transaction_id'), input('transaction_type'));
+            $_SESSION['notice'] = 'Transaction type corrected. Spending totals now reflect this change.';
+            header('Location: /?' . http_build_query(['page' => 'statements', 'month' => input('month'), 'account' => (int) input('account_filter'), 'basis' => input('basis') === 'calendar' ? 'calendar' : 'statement']), true, 303); exit;
+        } elseif ($action === 'save_statement_period') {
+            $periodAccount = (int) input('period_account');
+            save_statement_period($db, $userId, $periodAccount, input('period_month'), input('period_start'), input('period_end'), input('period_due'), input('scheduled_date'), input('scheduled_amount'));
+            $_SESSION['notice'] = 'Statement dates saved. Rebuilds and PDF downloads now use this period.';
+            header('Location: /?' . http_build_query(['page' => 'statements', 'account' => $periodAccount, 'month' => input('period_month')]), true, 303); exit;
         } elseif ($action === 'save_merchant') {
             update_merchant($db, $userId, (int) input('merchant_id'), input('merchant_name'), (int) input('category_id'), input('custom_category'));
             $_SESSION['notice'] = 'Merchant and category saved. This applies to your past reports and future matching transactions.';
@@ -148,9 +157,10 @@ if (in_array($page, ['analyzer', 'imports', 'statements'], true)) {
             $categories = analyzer_query($db, 'SELECT id, name FROM analyzer_categories WHERE user_id = ? ORDER BY name', [$userId])->fetchAll();
         }
         if ($page === 'statements') {
-            $months = report_months($db, $userId, $accountFilter);
+            $calendarStatement = ($_GET['basis'] ?? '') === 'calendar';
+            $months = $calendarStatement ? report_months($db, $userId, $accountFilter) : statement_months($db, $userId, $accountFilter);
             $month = $requestedMonth !== '' ? $requestedMonth : ($months[0] ?? gmdate('Y-m'));
-            $statement = spending_statement($db, $userId, $month, $accountFilter, $displayName);
+            $statement = spending_statement($db, $userId, $month, $accountFilter, $displayName, $calendarStatement);
             if (($_GET['download'] ?? '') === 'pdf') {
                 $pdf = statement_pdf($statement);
                 header('Content-Type: application/pdf');
@@ -177,6 +187,7 @@ if ($page === 'home') {
         $homeDb = database();
         $history = spending_history($homeDb, $userId);
         $dashboard = spending_dashboard($history);
+        $rhythm = statement_rhythm($homeDb, $userId);
         $overviewInsights = overview_insights($homeDb, $userId, $history);
         $savedMonths = analyzer_query($homeDb, "SELECT month FROM analyzer_month_reviews WHERE user_id = ? AND status = 'completed' ORDER BY month DESC LIMIT 12", [$userId])->fetchAll(PDO::FETCH_COLUMN);
         foreach ($savedMonths as $savedMonth) {

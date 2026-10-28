@@ -24,17 +24,20 @@
     else: ?><p class="empty-inline">No purchases yet.</p><?php endif; ?>
 </section>
 </div>
+<?php $useStatementRhythm = !empty($rhythm) && ($_GET['rhythm'] ?? '') !== 'calendar'; $rhythmSeries = $useStatementRhythm ? $rhythm['series'] : $dashboard['series']; $rhythmAverage = $useStatementRhythm ? $rhythm['average'] : $dashboard['average']; ?>
 <section class="panel year-panel" aria-labelledby="year-heading">
-    <div class="section-heading"><div><h2 id="year-heading">Your spending rhythm</h2><p class="hint"><?= escape(month_label(array_key_first($dashboard['series']))) ?>–<?= escape(month_label($latest)) ?></p></div>
-        <?php if ($dashboard['average'] !== null): ?><div class="average-metric" tabindex="0" data-tooltip="<?= escape('Average of ' . count($dashboard['pastMonths']) . ' imported months in this chart, excluding the current month. Missing months are excluded; uploaded history may be partial.') ?>"><span>Average month</span><strong><?= money($dashboard['average']) ?></strong></div><?php endif; ?>
+    <div class="section-heading"><div><h2 id="year-heading">Your spending rhythm</h2><p class="hint"><?= escape(month_label(array_key_first($rhythmSeries))) ?>–<?= escape(month_label(array_key_last($rhythmSeries))) ?></p><?php if (!empty($rhythm)): ?><p class="hint"><?= $useStatementRhythm ? 'Spending by statement period · ' . escape($rhythm['label']) : 'Calendar-month spending' ?> · <a href="/?rhythm=<?= $useStatementRhythm ? 'calendar' : 'statement' ?>#year-heading"><?= $useStatementRhythm ? 'View calendar months' : 'View statement periods' ?></a></p><?php endif; ?></div>
+        <?php if ($rhythmAverage !== null): ?><div class="average-metric" tabindex="0" data-tooltip="<?= escape($useStatementRhythm ? 'Average of ' . $rhythm['closed_count'] . ' ended periods with imported activity. Estimated dates and partial history may affect totals.' : 'Average of past calendar months with imported activity; missing months are excluded.') ?>"><span><?= $useStatementRhythm ? 'Average statement' : 'Average month' ?></span><strong><?= money($rhythmAverage) ?></strong></div><?php endif; ?>
     </div>
     <div class="month-grid">
-        <?php $peak = max(1, ...array_values(array_filter($dashboard['series'], fn($v) => $v !== null))); foreach ($dashboard['series'] as $key => $value):
+        <?php $peak = max(1, ...array_values(array_filter($rhythmSeries, fn($v) => $v !== null))); foreach ($rhythmSeries as $key => $value):
             $label = (new DateTimeImmutable($key . '-01'))->format('M'); $ratio = $value === null ? 0 : $value / $peak;
-            $tip = month_label($key) . ($key === gmdate('Y-m') ? ' · so far' : '') . "\n" . ($value === null ? 'No imported data' : money($value) . ' in purchases'); ?>
-        <a class="month-tile <?= $key === gmdate('Y-m') ? 'in-progress' : '' ?>" href="<?= escape(analyzer_url($key)) ?>" data-tooltip="<?= escape($tip) ?>" aria-label="<?= escape($tip) ?>">
+            $tilePeriod = $useStatementRhythm ? $rhythm['periods'][$key] : null; $tileOpen = $tilePeriod ? $tilePeriod['open'] : $key === gmdate('Y-m');
+            $tileUrl = $tilePeriod ? '/?' . http_build_query(['page' => 'statements', 'month' => $key, 'account' => $rhythm['account']]) : analyzer_url($key);
+            $tip = month_label($key) . ($tileOpen ? ' · so far' : '') . "\n" . ($value === null ? 'No imported data' : money($value) . ' in purchases') . ($tilePeriod ? "\n" . statement_period_caption($tilePeriod) . "\n" . statement_due_caption($tilePeriod) : ''); ?>
+        <a class="month-tile <?= $tileOpen ? 'in-progress' : '' ?>" href="<?= escape($tileUrl) ?>" data-tooltip="<?= escape($tip) ?>" aria-label="<?= escape($tip) ?>">
             <span><?= escape($label) ?></span><svg viewBox="0 0 64 72" aria-hidden="true"><rect width="64" height="72" rx="10" fill="#eff3fa"/><?php if ($value !== null): ?><rect x="0" y="<?= sprintf('%.2F', 72 - max(3, $ratio * 72)) ?>" width="64" height="<?= sprintf('%.2F', max(3, $ratio * 72)) ?>" rx="8" fill="<?= $value === $peak ? '#005f55' : '#5fbaa0' ?>"/><?php else: ?><text x="32" y="42" text-anchor="middle" fill="#56657b">—</text><?php endif; ?></svg>
-            <small><?= $key === gmdate('Y-m') ? 'so far' : substr($key, 0, 4) ?></small>
+            <small><?= $tileOpen ? 'so far' : ($tilePeriod && $tilePeriod['estimated'] ? 'estimated' : substr($key, 0, 4)) ?></small>
         </a><?php endforeach; ?>
     </div>
 </section>

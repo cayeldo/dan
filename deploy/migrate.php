@@ -11,6 +11,10 @@ try {
             if (trim($statement) !== '') { $db->exec($statement); }
         }
     }
+    require_once dirname(__DIR__) . '/analyzer.php';
+    $repaired = repair_payment_reversals($db);
+    $configured = configure_dan_statement_periods($db);
+    echo "Payment reversals corrected: {$repaired}. Dan statement dates " . ($configured ? 'configured' : 'already configured or no unambiguous card found') . ".\n";
     echo "Application tables are ready.\n";
 } catch (Throwable $error) {
     fwrite(STDERR, 'Migration failed (' . get_class($error) . "). No login accounts were changed.\n");

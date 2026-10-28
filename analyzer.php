@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/ai-categories.php';
+require_once __DIR__ . '/statement-periods.php';
 
 const ANALYZER_MAX_BYTES = 2097152;
 const ANALYZER_MAX_ROWS = 10000;
@@ -31,6 +32,7 @@ function classify_merchant(string $description, string $mcc = ''): array
 {
     $text = strtoupper(preg_replace('/\s+/', ' ', trim($description)) ?? $description);
     $rules = [
+        ['~^(?:RETURNED PAYMENT|PAYMENT (?:REVERSAL|RETURNED)) FEE\b~', 'Returned payment fee', 'Fees & Interest'],
         // Ticket numbers vary per purchase; this known descriptor identifies the airline.
         ['~^AMERICAN(?:\s+AIRLINES\b|\s+001\d{10}\s+FORT\s+WORTH\b)~', 'American Airlines', 'Travel'],
         ['~\bUBER\s*\*?\s*EATS\b~', 'Uber Eats', 'Food Delivery'],
@@ -129,6 +131,32 @@ function parse_transaction_date(string $value): string
     throw new InvalidArgumentException('Use dates in M/D/YY, M/D/YYYY, or YYYY-MM-DD format.');
 }
 
+/** Recognize payment principal only. Fees and merchant reversals remain spending/credits. */
+function is_payment_reversal(string $description): bool
+{
+    $text = strtoupper(trim(preg_replace('/\s+/', ' ', $description)));
+    return !preg_match('/\b(?:FEE|FEES|INTEREST)\b/', $text)
+        && (bool) preg_match('/^(?:(?:ONLINE |ACH |AUTOMATIC |CARD )?PAYMENT (?:REVERSAL|REVERSED|RETURNED)|RETURNED PAYMENT|REVERSED PAYMENT|REVERSAL OF PAYMENT)\b/', $text);
+}
+
+function payment_label(array $row): string
+{
+    return (int) $row['amount_cents'] < 0 ? 'Payment reversal' : 'Card payment';
+}
+
+/** Idempotent repair preserves source identities so old CSV uploads still deduplicate. */
+function repair_payment_reversals(PDO $db, ?int $user = null): int
+{
+    $sql = "SELECT id, user_id, description FROM analyzer_transactions WHERE kind = 'expense' AND amount_cents < 0 AND NOT EXISTS (SELECT 1 FROM analyzer_transaction_types o WHERE o.transaction_id = analyzer_transactions.id)";
+    $rows = analyzer_query($db, $sql . ($user !== null ? ' AND user_id = ?' : ''), $user !== null ? [$user] : [])->fetchAll();
+    $count = 0;
+    foreach ($rows as $row) {
+        if (!is_payment_reversal($row['description'])) { continue; }
+        $count += analyzer_query($db, "UPDATE analyzer_transactions SET kind = 'payment', merchant_id = NULL WHERE id = ? AND user_id = ? AND kind = 'expense'", [$row['id'], $row['user_id']])->rowCount();
+    }
+    return $count;
+}
+
 /** Parse only data; CSV contents never become instructions or executable code. */
 function parse_statement(string $contents, string $sign = 'negative'): array
 {
@@ -174,14 +202,15 @@ function parse_statement(string $contents, string $sign = 'negative'): array
                 if ($amount === 0) { throw new InvalidArgumentException('Zero-dollar rows cannot be imported.'); }
                 $isPayment = preg_match('/^(?:PAYMENT (?:MADE|RECEIVED|THANK)|AUTOPAY|AUTOMATIC PAYMENT|ONLINE PAYMENT|INTERNET PAYMENT|THANK YOU.*PAYMENT)/i', $description)
                     || in_array(strtoupper($get('type')), ['PAYMENT', 'CARD PAYMENT'], true);
-                if ($isPayment && $amount < 0) { throw new InvalidArgumentException('A card payment has the sign of a purchase. Check the charge amount format.'); }
-                $kind = $isPayment ? 'payment' : ($amount < 0 ? 'expense' : 'refund');
+                $reversal = is_payment_reversal($description);
+                if ($isPayment && !$reversal && $amount < 0) { throw new InvalidArgumentException('A card payment has the sign of a purchase. Check the charge amount format.'); }
+                $kind = ($isPayment || $reversal) ? 'payment' : ($amount < 0 ? 'expense' : 'refund');
                 $parts = array_map('trim', explode(';', $memo));
                 $reference = $get('reference');
                 if ($reference === '' && preg_match('/^\d{12,32}$/', $parts[0] ?? '')) { $reference = $parts[0]; }
                 if (strlen($reference) > 100) { throw new InvalidArgumentException('Bank reference is too long.'); }
                 $identity = $reference !== '' ? 'bank:' . $reference : 'fallback:' . json_encode([$date,
-                    strtoupper(preg_replace('/\s+/', ' ', $description)), $amount, $kind], JSON_THROW_ON_ERROR);
+                    strtoupper(preg_replace('/\s+/', ' ', $description)), $amount, $reversal && $amount < 0 ? 'expense' : $kind], JSON_THROW_ON_ERROR);
                 if ($reference === '') {
                     $occurrences[$identity] = ($occurrences[$identity] ?? 0) + 1;
                     $identity .= ':' . $occurrences[$identity];
@@ -237,9 +266,9 @@ function duplicate_matches(PDO $db, int $userId, int $accountId, array $rows): a
     $existing = [];
     foreach (array_chunk(array_column($rows, 'dedupe_key'), 400) as $keys) {
         $placeholders = implode(',', array_fill(0, count($keys), '?'));
-        $found = analyzer_query($db, "SELECT dedupe_key, transaction_date, amount_cents, kind FROM analyzer_transactions WHERE user_id = ? AND account_id = ? AND dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
+        $found = analyzer_query($db, "SELECT dedupe_key, transaction_date, amount_cents, kind, (SELECT kind FROM analyzer_transaction_types o WHERE o.transaction_id = analyzer_transactions.id AND o.user_id = analyzer_transactions.user_id) AS manual_kind FROM analyzer_transactions WHERE user_id = ? AND account_id = ? AND dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
         foreach ($found as $row) { $existing[$row['dedupe_key']] = $row; }
-        $aliases = analyzer_query($db, "SELECT a.dedupe_key, t.transaction_date, t.amount_cents, t.kind FROM analyzer_csv_feed_matches a JOIN analyzer_transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id AND t.account_id = a.account_id WHERE a.user_id = ? AND a.account_id = ? AND a.dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
+        $aliases = analyzer_query($db, "SELECT a.dedupe_key, t.transaction_date, t.amount_cents, t.kind, (SELECT kind FROM analyzer_transaction_types o WHERE o.transaction_id = t.id AND o.user_id = t.user_id) AS manual_kind FROM analyzer_csv_feed_matches a JOIN analyzer_transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id AND t.account_id = a.account_id WHERE a.user_id = ? AND a.account_id = ? AND a.dedupe_key IN ($placeholders)", [$userId, $accountId, ...$keys])->fetchAll();
         foreach ($aliases as $row) { $existing[$row['dedupe_key']] = $row; }
     }
     return $existing;
@@ -248,7 +277,7 @@ function duplicate_matches(PDO $db, int $userId, int $accountId, array $rows): a
 /** Duplicate bank references with changed financial data need human review, not silent skipping. */
 function check_duplicate(array $row, array $existing): void
 {
-    if ($row['date'] !== $existing['transaction_date'] || $row['amount'] !== (int) $existing['amount_cents'] || $row['kind'] !== $existing['kind']) {
+    if ($row['date'] !== $existing['transaction_date'] || $row['amount'] !== (int) $existing['amount_cents'] || (empty($existing['manual_kind']) && $row['kind'] !== $existing['kind'])) {
         throw new InvalidArgumentException('A bank reference matches an existing transaction with a different date or amount. Nothing was imported. Check the original statement or charge amount format.');
     }
 }
@@ -311,7 +340,7 @@ function preview_import(PDO $db, int $userId, array $pending): array
         $result['added']++;
         $result['fallback'] += (int) ($row['reference'] === null);
         $result['months'][substr($row['date'], 0, 7)] = true;
-        $result[$row['kind'] === 'expense' ? 'expenses' : ($row['kind'] === 'refund' ? 'refunds' : 'payments')] += abs($row['amount']);
+        $result[$row['kind'] === 'expense' ? 'expenses' : ($row['kind'] === 'refund' ? 'refunds' : 'payments')] += $row['kind'] === 'payment' ? $row['amount'] : abs($row['amount']);
         if ($row['kind'] === 'payment') { continue; }
         $suggestion = $rules[$row['suggestion']['key']] ?? $row['suggestion'];
         $key = merchant_match_key($suggestion['name']);
@@ -412,16 +441,21 @@ function report_months(PDO $db, int $userId, int $accountId = 0): array
 function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0): array
 {
     if (!preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $month)) { throw new InvalidArgumentException('Choose a valid month.'); }
-    $next = (new DateTimeImmutable($month . '-01'))->modify('+1 month')->format('Y-m-d');
+    return date_range_report($db, $userId, $month . '-01', (new DateTimeImmutable($month . '-01'))->format('Y-m-t'), $accountId);
+}
+
+function date_range_report(PDO $db, int $userId, string $start, string $end, int $accountId = 0): array
+{
+    $next = (new DateTimeImmutable($end))->modify('+1 day')->format('Y-m-d');
     $sql = 'SELECT t.*, m.name AS merchant, m.category_id, m.needs_review, j.status AS ai_status, c.name AS category, a.label AS account FROM analyzer_transactions t JOIN analyzer_accounts a ON a.id = t.account_id LEFT JOIN analyzer_merchants m ON m.id = t.merchant_id LEFT JOIN analyzer_categories c ON c.id = m.category_id LEFT JOIN analyzer_ai_jobs j ON j.merchant_id = m.id WHERE t.user_id = ? AND t.transaction_date >= ? AND t.transaction_date < ?';
-    $params = [$userId, $month . '-01', $next];
+    $params = [$userId, $start, $next];
     if ($accountId > 0) { $sql .= ' AND t.account_id = ?'; $params[] = $accountId; }
     $rows = analyzer_query($db, $sql . ' ORDER BY t.transaction_date DESC, t.id DESC', $params)->fetchAll();
-    $report = ['expenses' => 0, 'refunds' => 0, 'payments' => 0, 'count' => count($rows), 'purchase_count' => 0,
+    $report = ['expenses' => 0, 'refunds' => 0, 'payments' => 0, 'payment_credits' => 0, 'payment_reversals' => 0, 'count' => count($rows), 'purchase_count' => 0,
         'merchants' => [], 'categories' => [], 'category_groups' => [], 'payment_rows' => [], 'review_count' => 0];
     foreach ($rows as $row) {
         $amount = abs((int) $row['amount_cents']);
-        if ($row['kind'] === 'payment') { $report['payments'] += $amount; $report['payment_rows'][] = $row; continue; }
+        if ($row['kind'] === 'payment') { $report['payments'] += (int) $row['amount_cents']; $report[(int) $row['amount_cents'] < 0 ? 'payment_reversals' : 'payment_credits'] += $amount; $report['payment_rows'][] = $row; continue; }
         $bucket = $row['kind'] === 'expense' ? 'expenses' : 'refunds';
         $report[$bucket] += $amount;
         if ($bucket === 'expenses') { $report['purchase_count']++; }
@@ -466,4 +500,22 @@ function chart_color(int $index): string
 {
     $palette = ['#2855d9', '#087e8b', '#9a43bd', '#dc7925', '#d23d69', '#32764b', '#7263d8', '#8b622d', '#00649c', '#c34734', '#637126', '#8e4877', '#4e6a86', '#747b87', '#b37708', '#27384d'];
     return $palette[$index % count($palette)];
+}
+
+/** A manual transaction type survives future feed refreshes; categories remain separate. */
+function save_transaction_type(PDO $db, int $user, int $id, string $type): void
+{
+    if (!in_array($type, ['payment', 'spending'], true)) { throw new InvalidArgumentException('Choose payment adjustment or spending.'); }
+    $db->beginTransaction();
+    try {
+        analyzer_query($db, 'SELECT id FROM users WHERE id = ? FOR UPDATE', [$user]);
+        $row = analyzer_query($db, 'SELECT * FROM analyzer_transactions WHERE id = ? AND user_id = ?', [$id, $user])->fetch();
+        if (!$row) { throw new InvalidArgumentException('Choose one of your transactions.'); }
+        $kind = $type === 'payment' ? 'payment' : ((int) $row['amount_cents'] < 0 ? 'expense' : 'refund');
+        $merchant = $kind === 'payment' ? null : resolve_merchant($db, $user, classify_merchant($row['description']));
+        analyzer_query($db, 'DELETE FROM analyzer_transaction_types WHERE transaction_id = ? AND user_id = ?', [$id, $user]);
+        analyzer_query($db, 'INSERT INTO analyzer_transaction_types (transaction_id, user_id, kind) VALUES (?, ?, ?)', [$id, $user, $kind]);
+        analyzer_query($db, 'UPDATE analyzer_transactions SET kind = ?, merchant_id = ? WHERE id = ? AND user_id = ?', [$kind, $merchant, $id, $user]);
+        $db->commit();
+    } catch (Throwable $e) { if ($db->inTransaction()) { $db->rollBack(); } throw $e; }
 }
