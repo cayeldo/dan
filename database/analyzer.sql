@@ -241,29 +241,6 @@ CREATE TABLE IF NOT EXISTS analyzer_vacation_contributions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
-CREATE TABLE IF NOT EXISTS analyzer_statement_settings (
-    account_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    closing_day INT NOT NULL DEFAULT 6,
-    due_day INT NOT NULL DEFAULT 3,
-    FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS analyzer_statement_periods (
-    account_id BIGINT UNSIGNED NOT NULL,
-    user_id BIGINT UNSIGNED NOT NULL,
-    month CHAR(7) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    due_date DATE DEFAULT NULL,
-    scheduled_date DATE DEFAULT NULL,
-    scheduled_cents BIGINT DEFAULT NULL,
-    PRIMARY KEY (account_id, month),
-    FOREIGN KEY (account_id) REFERENCES analyzer_accounts(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS analyzer_transaction_types (
     transaction_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,

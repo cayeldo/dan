@@ -1,15 +1,14 @@
 <?php
 declare(strict_types=1);
 
-/** Rebuild from the ledger using saved billing dates (or an explicitly labeled calendar period). */
-function spending_statement(PDO $db, int $user, string $month, int $account, string $name, bool $calendar = false): array
+/** Build a calendar-month spending record from the same ledger as the analyzer. */
+function spending_statement(PDO $db, int $user, string $month, int $account, string $name): array
 {
     if (!budget_month_valid($month)) { throw new InvalidArgumentException('Choose a valid statement month.'); }
     $accounts = user_accounts($db, $user);
     $labels = array_column($accounts, 'label', 'id');
     if ($account > 0 && !isset($labels[$account])) { throw new InvalidArgumentException('Choose one of your cards.'); }
-    $period = $calendar ? null : statement_period($db, $user, $account, $month);
-    $report = $period ? date_range_report($db, $user, $period['start_date'], $period['end_date'], (int) $period['account_id']) : monthly_report($db, $user, $month, $account);
+    $report = monthly_report($db, $user, $month, $account);
     $rows = $report['payment_rows'];
     foreach ($report['merchants'] as $merchant) { $rows = [...$rows, ...$merchant['rows']]; }
     usort($rows, fn($a, $b) => strcmp($a['transaction_date'], $b['transaction_date']) ?: (int) $a['id'] <=> (int) $b['id']);
@@ -19,13 +18,12 @@ function spending_statement(PDO $db, int $user, string $month, int $account, str
     return ['month' => $month, 'name' => $name, 'account' => $account,
         'show_cards' => $account === 0 && count($accounts) > 1,
         'scope' => $account ? $labels[$account] : 'All imported cards',
-        'period' => $period, 'calendar' => $period === null,
-        'start' => $period['start_date'] ?? $month . '-01', 'end' => $period['end_date'] ?? (new DateTimeImmutable($month . '-01'))->format('Y-m-t'),
+        'start' => $month . '-01', 'end' => (new DateTimeImmutable($month . '-01'))->format('Y-m-t'),
         'generated' => (new DateTimeImmutable('now', new DateTimeZone('America/New_York')))->format('M j, Y g:i a T'),
-        'status' => $period ? (($period['estimated'] ? 'Estimated dates · ' : '') . ($period['future'] ? 'Upcoming period' : ($period['open'] ? 'Statement in progress' : 'Period ended · coverage not confirmed'))) : ($complete ? 'Confirmed complete' : ($current ? 'Month in progress' : ($month > gmdate('Y-m') ? 'Upcoming month' : 'Data not confirmed complete'))),
+        'status' => $complete ? 'Confirmed complete' : ($current ? 'Month in progress' : ($month > gmdate('Y-m') ? 'Upcoming month' : 'Data not confirmed complete')),
         'report' => $report, 'rows' => $rows,
-        'budget' => !$period && ($account === 0 || count($accounts) === 1) ? budget_progress($db, $user, $month) : null,
-        'review' => !$period && ($review['status'] ?? '') === 'completed' ? $review : null];
+        'budget' => ($account === 0 || count($accounts) === 1) ? budget_progress($db, $user, $month) : null,
+        'review' => ($review['status'] ?? '') === 'completed' ? $review : null];
 }
 
 /** Render locally, with no AI requests, remote resources, or stored statement files. */

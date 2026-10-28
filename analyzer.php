@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/ai-categories.php';
-require_once __DIR__ . '/statement-periods.php';
 
 const ANALYZER_MAX_BYTES = 2097152;
 const ANALYZER_MAX_ROWS = 10000;
@@ -441,14 +440,9 @@ function report_months(PDO $db, int $userId, int $accountId = 0): array
 function monthly_report(PDO $db, int $userId, string $month, int $accountId = 0): array
 {
     if (!preg_match('/\A20\d{2}-(0[1-9]|1[0-2])\z/', $month)) { throw new InvalidArgumentException('Choose a valid month.'); }
-    return date_range_report($db, $userId, $month . '-01', (new DateTimeImmutable($month . '-01'))->format('Y-m-t'), $accountId);
-}
-
-function date_range_report(PDO $db, int $userId, string $start, string $end, int $accountId = 0): array
-{
-    $next = (new DateTimeImmutable($end))->modify('+1 day')->format('Y-m-d');
+    $next = (new DateTimeImmutable($month . '-01'))->modify('+1 month')->format('Y-m-d');
     $sql = 'SELECT t.*, m.name AS merchant, m.category_id, m.needs_review, j.status AS ai_status, c.name AS category, a.label AS account FROM analyzer_transactions t JOIN analyzer_accounts a ON a.id = t.account_id LEFT JOIN analyzer_merchants m ON m.id = t.merchant_id LEFT JOIN analyzer_categories c ON c.id = m.category_id LEFT JOIN analyzer_ai_jobs j ON j.merchant_id = m.id WHERE t.user_id = ? AND t.transaction_date >= ? AND t.transaction_date < ?';
-    $params = [$userId, $start, $next];
+    $params = [$userId, $month . '-01', $next];
     if ($accountId > 0) { $sql .= ' AND t.account_id = ?'; $params[] = $accountId; }
     $rows = analyzer_query($db, $sql . ' ORDER BY t.transaction_date DESC, t.id DESC', $params)->fetchAll();
     $report = ['expenses' => 0, 'refunds' => 0, 'payments' => 0, 'payment_credits' => 0, 'payment_reversals' => 0, 'count' => count($rows), 'purchase_count' => 0,

@@ -433,30 +433,24 @@ run_budget_advice(database(), fn() => ['summary' => 'Your plan has room for savi
             destination = Path(os.environ['DAN_PREVIEW_DIR'])
             destination.mkdir(parents=True, exist_ok=True)
             (destination / 'admin.html').write_text(issued)
-        # Billing dates and manual payment classification use authenticated, CSRF-protected writes.
-        statement_form = request('/?page=statements&month=2026-10')[1]
-        period_card = re.search(r'<select id="period-account".*?<option value="(\d+)"', statement_form, re.S).group(1)
-        dates = {'csrf': csrf, 'action': 'save_statement_period', 'period_account': period_card, 'period_month': '2026-10', 'period_start': '2026-09-05', 'period_end': '2026-10-06', 'period_due': '2026-11-03', 'scheduled_date': '2026-11-01', 'scheduled_amount': '700.00'}
-        check(request('/?page=statements', dict(dates, csrf='invalid'))[0] == 403, 'billing date changes require valid CSRF')
-        status, billing, _ = request('/?page=statements', dates)
-        check(status == 200 and 'Sep 5, 2026 - Oct 6, 2026' in billing and 'Payment due Nov 3, 2026' in billing and 'Scheduled payment: $700.00 on Nov 1, 2026' in billing, 'saved billing dates and payment schedule appear on rebuilt statement')
-        rebuilt = request('/?page=statements&month=2026-10&account=' + period_card)[1]
-        check('Payment due Nov 3, 2026' in rebuilt, 'repeated rebuild retains saved due date')
-        check('Estimated payment due Dec 3, 2026' in request('/?page=statements&month=2026-11&account=' + period_card)[1], 'following period clearly marks extrapolated due date')
-        check('Calendar period' in request('/?page=statements&month=2026-10&basis=calendar&account=' + period_card)[1], 'calendar statement remains selectable')
-        status, rejected, _ = request('/?page=statements', dict(dates, period_month='2026-11', period_start='2026-10-06', period_end='2026-11-06', period_due='2026-12-03'))
-        check('overlaps another saved statement' in rejected, 'billing form rejects overlapping confirmed periods')
-        check(request('/?page=statements', dict(dates, csrf=token(emilia_home)), browser=fresh)[1].find('Choose one of your cards.') >= 0, 'billing form enforces card ownership')
-        correction_page = request('/?page=statements&month=2026-08&basis=calendar&account=' + period_card)[1]
+        # Calendar reports remain the default even when an old billing-period link is used.
+        for target in ['/?page=statements&month=2026-10', '/?page=statements&month=2026-10&basis=statement']:
+            status, calendar_statement, _ = request(target)
+            check(status == 200 and 'Oct 1 - Oct 31, 2026' in calendar_statement and 'Statement dates &amp; payment timing' not in calendar_statement and 'Scheduled payment' not in calendar_statement, 'statement rebuild uses calendar dates and removes payment timing')
+        calendar_home = request('/?rhythm=statement')[1]
+        check('Spending by statement period' not in calendar_home and 'Average statement' not in calendar_home, 'old rhythm links show the calendar chart')
+        month_links = re.findall(r'class="month-tile [^"]*" href="([^"]+)"', calendar_home)
+        check(bool(month_links) and all('page=analyzer' in link and 'basis=' not in link for link in month_links), 'calendar chart bars link to the monthly analyzer')
+        calendar_analyzer = request('/?page=analyzer&month=2026-10&basis=statement')[1]
+        check('id="analyzer-basis"' not in calendar_analyzer and 'id="month-comparison"' in calendar_analyzer, 'old analyzer links restore normal calendar analysis')
+        correction_page = request('/?page=statements&month=2026-08')[1]
         transaction_match = re.search(r'<select id="transaction-type-row".*?<option value="(\d+)"', correction_page, re.S)
         if transaction_match:
-            correction = {'csrf': csrf, 'action': 'save_transaction_type', 'transaction_id': transaction_match.group(1), 'transaction_type': 'payment', 'month': '2026-08', 'account_filter': period_card, 'basis': 'calendar'}
+            correction = {'csrf': csrf, 'action': 'save_transaction_type', 'transaction_id': transaction_match.group(1), 'transaction_type': 'payment', 'month': '2026-08', 'account_filter': '0'}
             check(request('/?page=statements', dict(correction, csrf='invalid'))[0] == 403, 'transaction type changes require valid CSRF')
             status, corrected, _ = request('/?page=statements', correction)
             check(status == 200 and 'Transaction type corrected.' in corrected, 'statement allows a manual payment adjustment correction')
             check('Choose one of your transactions.' in request('/?page=statements', dict(correction, csrf=token(emilia_home)), browser=fresh)[1], 'manual transaction correction enforces ownership')
-        if os.environ.get('DAN_PREVIEW_DIR'):
-            (Path(os.environ['DAN_PREVIEW_DIR']) / 'billing-statement.html').write_text(billing)
         status, login, _ = request('/', {'csrf': csrf, 'action': 'logout'})
         check('autocomplete="current-password"' in login, 'sign-out returns to login')
         status, protected, _ = request('/?page=analyzer')
